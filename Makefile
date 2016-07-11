@@ -1,10 +1,16 @@
 PROGS = regex binary
 HEADERS = genetic.h
 
-GCC = g++
-OPTIONS = -Wall -fno-diagnostics-show-caret -std=c++11
+CXXFLAGS += -Wall -fno-diagnostics-show-caret -std=c++11
 
-all: $(PROGS)
+all: CXXFLAGS += -O3
+debug: CXXFLAGS += -g
+all debug: $(PROGS)
+
+clean:
+	rm $(PROGS)
+
+.PHONY: all debug clean
 
 $(PROGS): %: %.cpp $(HEADERS)
-	$(GCC) $(OPTIONS) -O3 $@.cpp -o $@
+	$(CXX) $(CXXFLAGS) $@.cpp -o $@
