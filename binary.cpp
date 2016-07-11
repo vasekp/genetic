@@ -1,5 +1,6 @@
 #include <iostream>
 #include <random>
+#include <functional>
 
 #include "genetic.h"
 
@@ -9,7 +10,7 @@ namespace Config {
   const float selectBias = 3;
   const int popSize = 500;
   const int popSize2 = 500;
-  const int nGen = 200;
+  const int nGen = 500;
 
   const float expLengthIni = 100;
   const float expLengthAdd = 5;
@@ -17,14 +18,14 @@ namespace Config {
   const float pControl = 1/1000.0;
 
   const int nIn = 6;
-  const int nOut = 3;
+  const int nOut = 1;
   const int nAnc = 3;
   const int nBit = nIn + nOut + nAnc;
 
   unsigned f(unsigned in) {
     int in1 = in & ((1 << Config::nIn/2) - 1);
     int in2 = (in >> Config::nIn/2) & ((1 << Config::nIn/2) - 1);
-    return (in1 + in2) & ((1 << Config::nOut) - 1);
+    return (in1 + in2 >> 2) & ((1 << Config::nOut) - 1);
   }
 }
 
@@ -86,6 +87,8 @@ class Candidate: public ICandidate<float> {
   static Candidate m5(const Candidate&);
   static Candidate m6(const Candidate&);
   static Candidate crossover(const Candidate&, const Candidate&);
+
+  static Candidate getNew(std::function<Candidate()>);
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
     os << c.fitness() << ':';
@@ -220,6 +223,17 @@ Candidate Candidate::crossover(const Candidate& p1, const Candidate& p2) {
   return Candidate(gm);
 }
 
+Candidate Candidate::getNew(std::function<Candidate()> get) {
+  Candidate (*mutations[])(const Candidate&) = {Candidate::m1, Candidate::m2, Candidate::m3, Candidate::m4, Candidate::m5, Candidate::m6};
+  //std::uniform_real_distribution<float> rDist(0, 1);
+  std::uniform_int_distribution<> rDist(0, 6);
+  int which = rDist(Context::rng);
+  if(which < 6)
+    return mutations[which](get());
+  else
+    return Candidate::crossover(get(), get());
+}
+
 
 int main() {
   Context::rng = std::mt19937((std::random_device())());
@@ -241,11 +255,8 @@ int main() {
 
   for(int gen = 0; gen < Config::nGen; gen++) {
     Population<Candidate> pop2 = pop;
-    //std::uniform_real_distribution<float> rDist(0, 1);
-    std::uniform_int_distribution<> rDist(0, 5);
-    Candidate (*func[])(const Candidate&) = {Candidate::m1, Candidate::m2, Candidate::m3, Candidate::m4, Candidate::m5, Candidate::m6};
     for(int b = 0; b < Config::popSize2; b++)
-      pop2.add(func[rDist(Context::rng)](pop.rankSelect()));
+      pop2.add(Candidate::getNew([&] { return pop.rankSelect(); }));
 
     pop = pop2.trim();
 
