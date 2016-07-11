@@ -11,10 +11,9 @@ namespace Context {
 };
 
 namespace Config {
-  /* This tunes rank-based selection. Zero would mean no account on
+  /* > 0. This tunes rank-based selection. Zero would mean no account on
    * fitness in the selection process whatsoever. The bigger the value the
-   * more candidates with low fitness are likely to be selected. A negative
-   * value can be used if high fitness candidates are to be sought. */
+   * more candidates with low fitness are likely to be selected. */
   extern const float selectBias;
 
   /* > 0. In this header file, this only serves the purpose of a default value
