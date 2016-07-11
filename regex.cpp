@@ -161,11 +161,11 @@ int main() {
 
   /* The main loop: (l+m) rule */
   for(int gen = 0; gen < Config::nGen; gen++) {
-
     Population<Candidate> pop2 = pop;
+    std::uniform_real_distribution<float> rDist(0, 1);
     for(int j = 0; j < Config::popSize2; j++)
       /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
-      if(std::uniform_real_distribution<>(0, 1)(Context::rng) < Config::pCrossover)
+      if(rDist(Context::rng) < Config::pCrossover)
         pop2.add(Candidate::crossover(pop.rankSelect(), pop.rankSelect()));
       else
         pop2.add(Candidate::mutate(pop.rankSelect()));
