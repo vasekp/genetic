@@ -14,11 +14,11 @@ namespace Config {
 
   const float expLengthIni = 100;
   const float expLengthAdd = 10;
-  const float pLength = 1/10000.0;
+  const float pLength = 1/1000.0;
   const float pControl = 1/1000.0;
 
-  const int bIn = 6;
-  const int cIn = 1;
+  const int bIn = 3;
+  const int cIn = 2;
   const int nIn = bIn * cIn;
   const int nOut = 3;
   const int nAnc = 0;
@@ -30,7 +30,8 @@ namespace Config {
       ins[j] = in & ((1 << Config::bIn) - 1);
       in >>= bIn;
     }
-    return (ins[0] % 19) & ((1 << Config::nOut) - 1);
+    //return (ins[0] % 19) & ((1 << Config::nOut) - 1);
+    return (ins[0] * ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
 
@@ -97,30 +98,33 @@ class Candidate: public ICandidate<float> {
   private:
   float computeFitness() const {
     register unsigned work;
-    unsigned out;
+    unsigned cmp;
     int mism = 0;
     for(int in = 0; in < (1 << Config::nIn); in++) {
       work = in;
       for(Gene g : gt)
         work = g.apply(work);
-      out = (work >> Config::nIn) & ((1 << Config::nOut) - 1);
-      if(out != Config::f(in))
-        mism++;
+      cmp = in | (Config::f(in) << Config::nIn);
+      mism += hamming(work ^ cmp, Config::nBit);
     }
-    return mism + gt.size()*Config::pLength + Config::pControl*hamming();
+    return mism + gt.size()*Config::pLength + Config::pControl*hamming2();
   }
 
-  int hamming() const {
+  int hamming2() const {
     int v = 0;
     for(Gene g : gt) {
-      unsigned ctrl = g.control();
-      int h = 0;
-      for(int i = 0, m = 1; i < Config::nBit - 1; i++, m <<= 1)
-        if(ctrl & m)
-          h++;
+      unsigned h = hamming(g.control(), Config::nBit - 1);
       v += h*h;
     }
     return v;
+  }
+
+  static inline int hamming(register unsigned x, register int mx) {
+    register int h = 0;
+    for(register int i = 0, m = 1; i < mx; i++, m <<= 1)
+      if(x & m)
+        h++;
+    return h;
   }
 };
 
