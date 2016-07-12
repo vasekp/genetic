@@ -83,23 +83,22 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::begin;
   using std::vector<Candidate>::end;
   using std::vector<Candidate>::size;
+  using std::vector<Candidate>::clear;
 
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
    * preferred, see discussion in Config above. */
-  Candidate& rankSelect() {
+  Candidate& rankSelect(float bias = Config::selectBias) {
+    ensureSorted();
     float x = (std::uniform_real_distribution<float>(0, 1))(Context::rng);
-    return (*this)[(int)(-log(1 - x + x*exp(-Config::selectBias))/Config::selectBias*this->size())];
+    return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*this->size())];
   }
 
   /* Returns unconditionally the best candidate of population. If more
    * candidates have equal best fitness the returned reference may be any of
    * them. */
   Candidate& best() {
-    if(!sorted) {
-      std::sort(this->begin(), this->end());
-      sorted = true;
-    }
+    ensureSorted();
     return *this->begin();
   }
 
@@ -110,6 +109,14 @@ class Population : private std::vector<Candidate> {
     sorted = true;
     if(this->size() > size)
       this->resize(size);
+  }
+
+  private:
+  inline void ensureSorted() {
+    if(!sorted) {
+      std::sort(this->begin(), this->end());
+      sorted = true;
+    }
   }
 };
 

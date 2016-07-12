@@ -7,7 +7,7 @@
 std::mt19937 Context::rng;
 
 namespace Config {
-  const float selectBias = 2;
+  const float selectBias = 1;
   const int popSize = 500;
   const int popSize2 = 3000;
   const int nGen = 500;
@@ -278,8 +278,9 @@ int main() {
     for(int b = 0; b < Config::popSize2; b++)
       pop2.add(CandidateFactory::getNew([&] { return pop.rankSelect(); }));
 
-    pop2.trim();
-    pop = pop2;
+    pop.clear();
+    for(int a = 0; a < Config::popSize; a++)
+      pop.add(pop2.rankSelect(2*Config::selectBias));
     SPopulation<Candidate, float>::Stat stat = pop.stat();
 
     std::cout << "Gen " << gen << ": "
