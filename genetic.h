@@ -74,11 +74,26 @@ class Population : private std::vector<Candidate> {
   bool sorted = false;
 
   public:
+  /* Creates an empty population. */
+  Population() = default;
+
+  /* Draws a population from a source function. */
+  Population(size_t size, std::function<Candidate()> src) {
+    add(size, src);
+  }
+
   /* Pushes back a new candidate. */
   void add(const Candidate& c) {
     this->push_back(c);
     sorted = false;
   }
+
+  /* Draws n candidates from a source function. */
+  void add(size_t size, std::function<Candidate()> src) {
+    for(size_t j = 0; j < size; j++)
+      add(src());
+  }
+
 
   using std::vector<Candidate>::begin;
   using std::vector<Candidate>::end;
@@ -140,7 +155,7 @@ class SPopulation : public Population<Candidate> {
         sf += f;
         sf2 += f*f;
       }
-      unsigned sz = this->size();
+      size_t sz = this->size();
       Float dev2 = sf2/sz - sf/sz*sf/sz;
       return Stat{sf/sz, dev2 >= 0 ? (Float)sqrt(dev2) : 0};
     }

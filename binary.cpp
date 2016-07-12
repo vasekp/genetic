@@ -275,12 +275,15 @@ int main() {
 
   for(int gen = 0; gen < Config::nGen; gen++) {
     SPopulation<Candidate, float> pop2 = pop;
-    for(int b = 0; b < Config::popSize2; b++)
-      pop2.add(CandidateFactory::getNew([&] { return pop.rankSelect(); }));
-
+    pop2.add(Config::popSize2, [&] {
+        return CandidateFactory::getNew([&] {
+              return pop.rankSelect();
+            });
+        });
     pop.clear();
-    for(int a = 0; a < Config::popSize; a++)
-      pop.add(pop2.rankSelect(2*Config::selectBias));
+    pop.add(Config::popSize, [&] {
+          return pop2.rankSelect(2*Config::selectBias);
+        });
     SPopulation<Candidate, float>::Stat stat = pop.stat();
 
     std::cout << "Gen " << gen << ": "
