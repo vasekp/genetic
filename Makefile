@@ -1,7 +1,7 @@
 PROGS = regex binary
 HEADERS = genetic.h
 
-CXXFLAGS += -Wall -fno-diagnostics-show-caret -std=c++14
+CXXFLAGS += -Wall -fno-diagnostics-show-caret -std=c++11
 
 all: CXXFLAGS += -O3
 debug: CXXFLAGS += -g

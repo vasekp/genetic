@@ -1,7 +1,7 @@
 # output files
 regex
 binary
-regex.vys
+*.vys
 
 # historic files
 hist
