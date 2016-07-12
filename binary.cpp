@@ -8,19 +8,20 @@ std::mt19937 Context::rng;
 
 namespace Config {
   const float selectBias = 1;
-  const int popSize = 500;
+  const int popSize = 1000;
   const int popSize2 = 3000;
   const int nGen = 500;
 
   const float expLengthIni = 100;
   const float expLengthAdd = 10;
-  const float pLength = 1/1000.0;
-  const float pControl = 1/1000.0;
+  const float pIn = 10;
+  const float pLength = 1/10000.0;
+  const float pControl = 1/3000.0;
 
-  const int bIn = 3;
-  const int cIn = 2;
+  const int bIn = 5;
+  const int cIn = 1;
   const int nIn = bIn * cIn;
-  const int nOut = 3;
+  const int nOut = 1;
   const int nAnc = 0;
   const int nBit = nIn + nOut + nAnc;
 
@@ -30,8 +31,8 @@ namespace Config {
       ins[j] = in & ((1 << Config::bIn) - 1);
       in >>= bIn;
     }
-    //return (ins[0] % 19) & ((1 << Config::nOut) - 1);
-    return (ins[0] * ins[1]) & ((1 << Config::nOut) - 1);
+    return (ins[0] % 5) & ((1 << Config::nOut) - 1);
+    //return (ins[0] * ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
 
@@ -93,6 +94,8 @@ class Candidate: public ICandidate<float> {
     return os;
   }
 
+  void dump(std::ostream&);
+
   friend class CandidateFactory;
 
   private:
@@ -106,6 +109,7 @@ class Candidate: public ICandidate<float> {
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
       mism += hamming(work ^ cmp, Config::nBit);
+      mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in, Config::nBit);
     }
     return mism + gt.size()*Config::pLength + Config::pControl*hamming2();
   }
@@ -255,6 +259,44 @@ class CandidateFactory {
 };
 
 
+void Candidate::dump(std::ostream& os) {
+  register unsigned work;
+  for(int in = 0; in < (1 << Config::nIn); in++) {
+    work = in;
+    for(Gene g : gt)
+      work = g.apply(work);
+    for(int i = 0; i < Config::cIn; i++) {
+      for(int j = 0; j < Config::bIn; j++)
+        os << ((in & (1 << ((i+1)*Config::bIn - 1 - j)))?1:0);
+      os << ' ';
+    }
+    os << "→ ";
+    for(int i = 0; i < Config::cIn; i++) {
+      for(int j = 0; j < Config::bIn; j++) {
+        bool bW = (work & (1 << ((i+1)*Config::bIn - 1 - j)))?1:0;
+        bool bI = (in & (1 << ((i+1)*Config::bIn - 1 - j)))?1:0;
+        if(bW != bI)
+          os << "\033[1;31m" << bW << "\033[0m";
+        else
+          os << bW;
+      }
+      os << ' ';
+    }
+    work >>= Config::nIn;
+    unsigned cmp = Config::f(in);
+    for(int j = Config::nOut - 1; j >= 0; j--) {
+      bool bW = (work & (1 << j))?1:0;
+      bool bC = (cmp & (1 << j))?1:0;
+      if(bW != bC)
+        os << "\033[1;33m" << bW << "\033[0m";
+      else
+        os << bW;
+    }
+    os << std::endl;
+  }
+}
+
+
 int main() {
   Context::rng = std::mt19937((std::random_device())());
 
@@ -290,4 +332,5 @@ int main() {
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << pop.best() << std::endl;
   }
+  pop.best().dump(std::cout);
 }
