@@ -82,6 +82,7 @@ class Population : private std::vector<Candidate> {
 
   using std::vector<Candidate>::begin;
   using std::vector<Candidate>::end;
+  using std::vector<Candidate>::size;
 
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
@@ -104,11 +105,36 @@ class Population : private std::vector<Candidate> {
 
   /* Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
-  Population& trim(size_t size = Config::popSize) {
+  void trim(size_t size = Config::popSize) {
     std::sort(this->begin(), this->end());
     sorted = true;
     if(this->size() > size)
       this->resize(size);
-    return *this;
   }
+};
+
+
+/* This derived class provides a new function stat() for candidate classes
+ * whose fitness is a simple floating point type or allows an implicit
+ * convertion to one. */
+template<class Candidate, typename Float>
+class SPopulation : public Population<Candidate> {
+  public:
+    struct Stat {
+      Float mean;
+      Float stdev;
+    };
+   
+    /* Calculates the mean and standard deviation of the sample's fitnesses. */
+    Stat stat() {
+      Float sf = 0, sf2 = 0;
+      for(Candidate c : *this) {
+        Float f = c.fitness();
+        sf += f;
+        sf2 += f*f;
+      }
+      unsigned sz = this->size();
+      Float dev2 = sf2/sz - sf/sz*sf/sz;
+      return Stat{sf/sz, dev2 >= 0 ? (Float)sqrt(dev2) : 0};
+    }
 };

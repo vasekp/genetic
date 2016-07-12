@@ -169,7 +169,8 @@ int main() {
         pop2.add(Candidate::crossover(pop.rankSelect(), pop.rankSelect()));
       else
         pop2.add(Candidate::mutate(pop.rankSelect()));
-    pop = pop2.trim();
+    pop2.trim();
+    pop = pop2;
 
     int cnt = 0;
     for(auto c : pop)

@@ -258,7 +258,7 @@ class CandidateFactory {
 int main() {
   Context::rng = std::mt19937((std::random_device())());
 
-  Population<Candidate> pop;
+  SPopulation<Candidate, float> pop;
   {
     float probTerm = 1/Config::expLengthIni; /* probability of termination; expLength = expected number of genes */
     std::uniform_real_distribution<float> rDist(0, 1);
@@ -274,12 +274,16 @@ int main() {
   }
 
   for(int gen = 0; gen < Config::nGen; gen++) {
-    Population<Candidate> pop2 = pop;
+    SPopulation<Candidate, float> pop2 = pop;
     for(int b = 0; b < Config::popSize2; b++)
       pop2.add(CandidateFactory::getNew([&] { return pop.rankSelect(); }));
 
-    pop = pop2.trim();
+    pop2.trim();
+    pop = pop2;
+    SPopulation<Candidate, float>::Stat stat = pop.stat();
 
-    std::cout << "Gen " << gen << ": best of pop " << pop.best() << std::endl;
+    std::cout << "Gen " << gen << ": "
+      "fitness " << stat.mean << " ± " << stat.stdev << ", "
+      "best of pop " << pop.best() << std::endl;
   }
 }
