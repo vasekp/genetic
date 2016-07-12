@@ -70,7 +70,7 @@ class ICandidate {
  * derived from ICandidate although no exposed properties except operator <
  * are accessed. Default constructor creates an empty population. */
 template<class Candidate>
-class Population : public std::vector<Candidate> {
+class Population : private std::vector<Candidate> {
   bool sorted = false;
 
   public:
@@ -79,6 +79,9 @@ class Population : public std::vector<Candidate> {
     this->push_back(c);
     sorted = false;
   }
+
+  using std::vector<Candidate>::begin;
+  using std::vector<Candidate>::end;
 
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
