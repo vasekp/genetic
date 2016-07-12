@@ -300,7 +300,7 @@ void Candidate::dump(std::ostream& os) {
 int main() {
   Context::rng = std::mt19937((std::random_device())());
 
-  SPopulation<Candidate, float> pop;
+  Population<Candidate> pop;
   {
     float probTerm = 1/Config::expLengthIni; /* probability of termination; expLength = expected number of genes */
     std::uniform_real_distribution<float> rDist(0, 1);
@@ -316,17 +316,16 @@ int main() {
   }
 
   for(int gen = 0; gen < Config::nGen; gen++) {
-    SPopulation<Candidate, float> pop2 = pop;
+    Population<Candidate> pop2 = pop;
     pop2.add(Config::popSize2, [&] {
         return CandidateFactory::getNew([&] {
               return pop.rankSelect();
             });
         });
-    pop.clear();
-    pop.add(Config::popSize, [&] {
+    pop = Population<Candidate>(Config::popSize, [&] {
           return pop2.rankSelect(2*Config::selectBias);
         });
-    SPopulation<Candidate, float>::Stat stat = pop.stat();
+    Population<Candidate>::Stat stat = pop.stat();
 
     std::cout << "Gen " << gen << ": "
       "fitness " << stat.mean << " ± " << stat.stdev << ", "

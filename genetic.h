@@ -1,6 +1,7 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <type_traits>
 
 
 /* Exactly one source file needs to define these quantities
@@ -49,6 +50,8 @@ class ICandidate {
   mutable bool fitnessValid = false;
 
   public:
+  typedef Fitness _FitnessType;
+
   Fitness fitness() const {
     if(!fitnessValid) {
       _fitness = computeFitness();
@@ -94,7 +97,6 @@ class Population : private std::vector<Candidate> {
       add(src());
   }
 
-
   using std::vector<Candidate>::begin;
   using std::vector<Candidate>::end;
   using std::vector<Candidate>::size;
@@ -126,6 +128,28 @@ class Population : private std::vector<Candidate> {
       this->resize(size);
   }
 
+
+  struct Stat {
+    double mean;
+    double stdev;
+  };
+
+  /* Returns the mean fitness of the population and the standard deviation.
+   * Conditional member (using SFINAE) for candidate classes whose fitness is
+   * a simple floating point type or allows an implicit convertion to one. */
+  template<typename FT = typename Candidate::_FitnessType>
+  auto stat() -> typename std::enable_if<std::is_convertible<FT, double>::value, Stat>::type {
+    double f, sf = 0, sf2 = 0;
+    for(Candidate c : *this) {
+      f = c.fitness();
+      sf += f;
+      sf2 += f*f;
+    }
+    size_t sz = this->size();
+    double dev2 = sf2/sz - sf/sz*sf/sz;
+    return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
+  }
+
   private:
   inline void ensureSorted() {
     if(!sorted) {
@@ -133,30 +157,4 @@ class Population : private std::vector<Candidate> {
       sorted = true;
     }
   }
-};
-
-
-/* This derived class provides a new function stat() for candidate classes
- * whose fitness is a simple floating point type or allows an implicit
- * convertion to one. */
-template<class Candidate, typename Float>
-class SPopulation : public Population<Candidate> {
-  public:
-    struct Stat {
-      Float mean;
-      Float stdev;
-    };
-   
-    /* Calculates the mean and standard deviation of the sample's fitnesses. */
-    Stat stat() {
-      Float sf = 0, sf2 = 0;
-      for(Candidate c : *this) {
-        Float f = c.fitness();
-        sf += f;
-        sf2 += f*f;
-      }
-      size_t sz = this->size();
-      Float dev2 = sf2/sz - sf/sz*sf/sz;
-      return Stat{sf/sz, dev2 >= 0 ? (Float)sqrt(dev2) : 0};
-    }
 };
