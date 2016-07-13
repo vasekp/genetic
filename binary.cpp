@@ -428,9 +428,12 @@ int main() {
     pop2.merge(pop);
 
     /* Rank-trim down to popSize */
-    pop = Population<Candidate>(Config::popSize, [&] {
+    pop = Population<Candidate>(Config::popSize-1, [&] {
           return pop2.rankSelect(2*Config::selectBias);
         });
+
+    /* Unconditionally add the best candidate */
+    pop.add(pop2.best());
 
     /* Summarize */
     Candidate best = pop.best();
