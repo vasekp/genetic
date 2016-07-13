@@ -80,9 +80,13 @@ class Population : private std::vector<Candidate> {
   /* Creates an empty population. */
   Population() = default;
 
+  Population(size_t count) {
+    this->reserve(count);
+  }
+
   /* Draws a population from a source function. */
-  Population(size_t size, std::function<Candidate()> src) {
-    add(size, src);
+  Population(size_t count, std::function<Candidate()> src) {
+    add(count, src);
   }
 
   /* Pushes back a new candidate. */
@@ -92,15 +96,32 @@ class Population : private std::vector<Candidate> {
   }
 
   /* Draws n candidates from a source function. */
-  void add(size_t size, std::function<Candidate()> src) {
-    for(size_t j = 0; j < size; j++)
+  void add(size_t count, std::function<Candidate()> src) {
+    this->reserve(size() + count);
+    for(size_t j = 0; j < count; j++)
       add(src());
+  }
+
+  /* Takes all candidates from another population. */
+  void add(Population<Candidate>& pop) {
+    this->reserve(size() + pop.size());
+    this->insert(end(), pop.begin(), pop.end());
+    sorted = false;
+  }
+
+  /* Like add(Population&) but moving the contents of the argument. */
+  void merge(Population<Candidate>& pop) {
+    this->reserve(size() + pop.size());
+    this->insert(end(), std::make_move_iterator(pop.begin()), std::make_move_iterator(pop.end()));
+    pop.clear();
+    sorted = false;
   }
 
   using std::vector<Candidate>::begin;
   using std::vector<Candidate>::end;
   using std::vector<Candidate>::size;
   using std::vector<Candidate>::clear;
+  using std::vector<Candidate>::operator[];
 
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
@@ -108,7 +129,7 @@ class Population : private std::vector<Candidate> {
   Candidate& rankSelect(float bias = Config::selectBias) {
     ensureSorted();
     float x = (std::uniform_real_distribution<float>(0, 1))(Context::rng);
-    return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*this->size())];
+    return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
   }
 
   /* Returns unconditionally the best candidate of population. If more
@@ -116,16 +137,16 @@ class Population : private std::vector<Candidate> {
    * them. */
   Candidate& best() {
     ensureSorted();
-    return *this->begin();
+    return this->front();
   }
 
   /* Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
-  void trim(size_t size = Config::popSize) {
-    std::sort(this->begin(), this->end());
+  void trim(size_t newSize = Config::popSize) {
+    std::sort(begin(), end());
     sorted = true;
-    if(this->size() > size)
-      this->resize(size);
+    if(size() > newSize)
+      this->resize(newSize);
   }
 
 
@@ -145,7 +166,7 @@ class Population : private std::vector<Candidate> {
       sf += f;
       sf2 += f*f;
     }
-    size_t sz = this->size();
+    size_t sz = size();
     double dev2 = sf2/sz - sf/sz*sf/sz;
     return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
   }
@@ -153,7 +174,7 @@ class Population : private std::vector<Candidate> {
   private:
   inline void ensureSorted() {
     if(!sorted) {
-      std::sort(this->begin(), this->end());
+      std::sort(begin(), end());
       sorted = true;
     }
   }

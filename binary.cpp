@@ -1,14 +1,15 @@
 #include <iostream>
 #include <random>
 #include <functional>
-#include "unistd.h"
+#include <thread>
+#include "unistd.h" // isatty()
 
 #include "genetic.h"
 
 std::mt19937 Context::rng;
 
 namespace Config {
-  const float selectBias = 1;
+  const float selectBias = 1.5;
   const int popSize = 2000;
   const int popSize2 = 5000;
   const int nGen = 500;
@@ -25,6 +26,8 @@ namespace Config {
   const int nOut = 3;
   const int nAnc = 0;
   const int nBit = nIn + nOut + nAnc;
+
+  const int nThreads = 4;
 
   unsigned f(unsigned in) {
     unsigned ins[cIn];
@@ -327,12 +330,23 @@ int main() {
   }
 
   for(int gen = 0; gen < Config::nGen; gen++) {
-    Population<Candidate> pop2 = pop;
-    pop2.add(Config::popSize2, [&] {
-        return CandidateFactory::getNew([&] {
-              return pop.rankSelect();
-            });
-        });
+    Population<Candidate> pop2(Config::popSize2, [&] {
+      return CandidateFactory::getNew([&] {
+            return pop.rankSelect();
+          });
+      });
+    pop2.merge(pop);
+
+    size_t sz = pop2.size();
+    std::vector<std::thread> tasks;
+    for(int k = 0; k < Config::nThreads; k++)
+      tasks.push_back(std::thread([&, k] {
+            for(size_t l = k; l < sz; l += Config::nThreads)
+              pop2[l].fitness();
+            }));
+    for(auto &task : tasks)
+      task.join();
+
     pop = Population<Candidate>(Config::popSize, [&] {
           return pop2.rankSelect(2*Config::selectBias);
         });
