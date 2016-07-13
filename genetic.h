@@ -130,7 +130,10 @@ class Population : private std::vector<Candidate> {
   Candidate& rankSelect(float bias = Config::selectBias) {
     ensureSorted();
     float x = (std::uniform_real_distribution<float>(0, 1))(Context::rng);
-    return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
+    if(x == 1)
+      return this->back();
+    else
+      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
   }
 
   /* Returns unconditionally the best candidate of population. If more
