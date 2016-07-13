@@ -9,16 +9,16 @@
 std::mt19937 Context::rng;
 
 namespace Config {
-  const float selectBias = 1.5;
+  const float selectBias = 1.0;
   const int popSize = 2000;
   const int popSize2 = 5000;
   const int nGen = 500;
 
-  const float expLengthIni = 100;
-  const float expLengthAdd = 10;
-  const float pIn = 10;
-  const float pLength = 1/10000.0;
-  const float pControl = 1/3000.0;
+  const float expLengthIni = 30;    // expected length of circuits in 0th generation
+  const float expLengthAdd = 10;    // expected length of gates inserted in mutation
+  const float pIn = 10;             // penalty for leaving input register modified (= error)
+  const float pLength = 1/10000.0;  // penalty for number of gates
+  const float pControl = 1/3000.0;  // penalty for control (quadratic in number of C-ing bits)
 
   const int bIn = 5;
   const int cIn = 1;
@@ -71,7 +71,7 @@ class Gene {
     return ctrlEnc;
   }
 
-  unsigned apply(unsigned src) {
+  unsigned apply(unsigned src) const {
     return ((src & ctrl) == ctrl)
       ? (src ^ (1 << tgt))
       : src;
@@ -126,14 +126,14 @@ class Candidate: public ICandidate<float> {
     int mism = 0;
     for(int in = 0; in < (1 << Config::nIn); in++) {
       work = in;
-      for(Gene g : gt)
+      for(const Gene &g : gt)
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
       mism += hamming(work ^ cmp, Config::nBit);
       mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in, Config::nBit);
     }
     float penalty = gt.size()*Config::pLength;
-    for(Gene g : gt) {
+    for(const Gene &g : gt) {
       unsigned h = hamming(g.control(), Config::nBit - 1);
       penalty += h*h*Config::pControl;
     }
@@ -342,7 +342,7 @@ void Candidate::dump(std::ostream& os) {
   register unsigned work;
   for(int in = 0; in < (1 << Config::nIn); in++) {
     work = in;
-    for(Gene g : gt)
+    for(Gene &g : gt)
       work = g.apply(work);
     for(int i = 0; i < Config::cIn; i++) {
       for(int j = 0; j < Config::bIn; j++)

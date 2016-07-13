@@ -162,7 +162,7 @@ class Population : private std::vector<Candidate> {
   template<typename FT = typename Candidate::_FitnessType>
   auto stat() -> typename std::enable_if<std::is_convertible<FT, double>::value, Stat>::type {
     double f, sf = 0, sf2 = 0;
-    for(Candidate c : *this) {
+    for(Candidate &c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;
