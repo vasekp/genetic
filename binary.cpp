@@ -9,7 +9,8 @@
 std::mt19937 Context::rng;
 
 namespace Config {
-  const float selectBias = 1.0;
+  const float selectBias = 2.0;
+  const float trimBias = 2.0;
   const int popSize = 10000;
   const int popSize2 = 30000;
   const int nGen = 500;
@@ -429,7 +430,7 @@ int main() {
 
     /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize-1, [&] {
-          return pop2.rankSelect(2*Config::selectBias);
+          return pop2.rankSelect(Config::trimBias);
         });
 
     /* Unconditionally add the best candidate */
