@@ -2,7 +2,7 @@
 #include <random>
 #include <functional>
 #include <thread>
-#include "unistd.h" // isatty()
+#include <unistd.h> // isatty()
 
 #include "genetic.h"
 
@@ -10,8 +10,8 @@ std::mt19937 Context::rng;
 
 namespace Config {
   const float selectBias = 1.0;
-  const int popSize = 2000;
-  const int popSize2 = 5000;
+  const int popSize = 10000;
+  const int popSize2 = 30000;
   const int nGen = 500;
 
   const float expLengthIni = 30;    // expected length of circuits in 0th generation
@@ -397,35 +397,44 @@ int main() {
   }
 
   for(int gen = 0; gen < Config::nGen; gen++) {
-    /* Create popSize2 children and admix parents */
-    Population<Candidate> pop2(Config::popSize2, [&] {
-      return CandidateFactory::getNew([&] {
-            return pop.rankSelect();
-          });
-      });
-    pop2.merge(pop);
 
-    /* Pre-evaluate fitnesses in parallel */
+    /* Create popSize2 children and admix parents */
+    Population<Candidate> pop2;
     {
-      size_t sz = pop2.size();
+      std::vector<Population<Candidate>> pops(Config::nThreads);
       std::vector<std::thread> tasks;
+
+      /* This is to ensure that std::sort won't be called from the threads */
+      pop.ensureSorted();
       for(int k = 0; k < Config::nThreads; k++)
+        /* Each thread contributes popSize2/nThreads children. This is subject
+         * to rounding errors but we don't care that much about exact numbers. */
         tasks.push_back(std::thread([&, k] {
-              for(size_t l = k; l < sz; l += Config::nThreads)
-                pop2[l].fitness();
-              }));
+            pops[k].add(Config::popSize2/Config::nThreads, [&] {
+              return CandidateFactory::getNew([&] {
+                    return pop.rankSelect();
+                  });
+              });
+            pops[k].precomputeFitnesses();
+          }));
+
       for(auto &task : tasks)
         task.join();
+
+      for(auto pp : pops)
+        pop2.merge(pp);
     }
+    /* Finally merge pop via move semantics, we don't need it anymore. */
+    pop2.merge(pop);
 
     /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize, [&] {
           return pop2.rankSelect(2*Config::selectBias);
         });
-    Population<Candidate>::Stat stat = pop.stat();
 
     /* Summarize */
     Candidate best = pop.best();
+    Population<Candidate>::Stat stat = pop.stat();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<

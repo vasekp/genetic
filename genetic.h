@@ -175,7 +175,11 @@ class Population : private std::vector<Candidate> {
     return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
   }
 
-  private:
+  inline void precomputeFitnesses() {
+    for(Candidate &c : *this)
+      c.fitness();
+  }
+
   inline void ensureSorted() {
     if(!sorted) {
       std::sort(begin(), end());
