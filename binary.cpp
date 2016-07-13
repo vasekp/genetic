@@ -36,7 +36,6 @@ namespace Config {
       in >>= bIn;
     }
     return (ins[0] % 5) & ((1 << Config::nOut) - 1);
-    //return (ins[0] * ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
 
@@ -93,6 +92,15 @@ class Gene {
 };
 
 
+inline int hamming(register unsigned x, register int mx) {
+  register int h = 0;
+  for(register int i = 0, m = 1; i < mx; i++, m <<= 1)
+    if(x & m)
+      h++;
+  return h;
+}
+
+
 class Candidate: public ICandidate<float> {
   std::vector<Gene> gt;
 
@@ -124,24 +132,12 @@ class Candidate: public ICandidate<float> {
       mism += hamming(work ^ cmp, Config::nBit);
       mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in, Config::nBit);
     }
-    return mism + gt.size()*Config::pLength + Config::pControl*hamming2();
-  }
-
-  int hamming2() const {
-    int v = 0;
+    float penalty = gt.size()*Config::pLength;
     for(Gene g : gt) {
       unsigned h = hamming(g.control(), Config::nBit - 1);
-      v += h*h;
+      penalty += h*h*Config::pControl;
     }
-    return v;
-  }
-
-  static inline int hamming(register unsigned x, register int mx) {
-    register int h = 0;
-    for(register int i = 0, m = 1; i < mx; i++, m <<= 1)
-      if(x & m)
-        h++;
-    return h;
+    return mism + penalty;
   }
 };
 
@@ -314,9 +310,9 @@ int main() {
   Context::rng = std::mt19937((std::random_device())());
   Colours::use = isatty(1);
 
-  Population<Candidate> pop;
+  Population<Candidate> pop(Config::popSize);
   {
-    float probTerm = 1/Config::expLengthIni; /* probability of termination; expLength = expected number of genes */
+    float probTerm = 1/Config::expLengthIni; // probability of termination; expLength = expected number of genes
     std::uniform_real_distribution<float> rDist(0, 1);
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
     std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
@@ -330,6 +326,7 @@ int main() {
   }
 
   for(int gen = 0; gen < Config::nGen; gen++) {
+    /* Create popSize2 children and admix parents */
     Population<Candidate> pop2(Config::popSize2, [&] {
       return CandidateFactory::getNew([&] {
             return pop.rankSelect();
@@ -337,26 +334,33 @@ int main() {
       });
     pop2.merge(pop);
 
-    size_t sz = pop2.size();
-    std::vector<std::thread> tasks;
-    for(int k = 0; k < Config::nThreads; k++)
-      tasks.push_back(std::thread([&, k] {
-            for(size_t l = k; l < sz; l += Config::nThreads)
-              pop2[l].fitness();
-            }));
-    for(auto &task : tasks)
-      task.join();
+    /* Pre-evaluate fitnesses in parallel */
+    {
+      size_t sz = pop2.size();
+      std::vector<std::thread> tasks;
+      for(int k = 0; k < Config::nThreads; k++)
+        tasks.push_back(std::thread([&, k] {
+              for(size_t l = k; l < sz; l += Config::nThreads)
+                pop2[l].fitness();
+              }));
+      for(auto &task : tasks)
+        task.join();
+    }
 
+    /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize, [&] {
           return pop2.rankSelect(2*Config::selectBias);
         });
     Population<Candidate>::Stat stat = pop.stat();
 
+    /* Summarize */
     Candidate best = pop.best();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
       ": " << best << std::endl;
   }
+
+  /* List the best-of-run candidate */
   pop.best().dump(std::cout);
 }

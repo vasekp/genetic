@@ -80,6 +80,7 @@ class Population : private std::vector<Candidate> {
   /* Creates an empty population. */
   Population() = default;
 
+  /* Create an empty population but preallocate space for count candidates. */
   Population(size_t count) {
     this->reserve(count);
   }
