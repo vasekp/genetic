@@ -115,7 +115,7 @@ class Candidate: public ICandidate<float> {
     return os;
   }
 
-  void dump(std::ostream&);
+  void dump(std::ostream&) const;
 
   friend class CandidateFactory;
 
@@ -338,11 +338,11 @@ class CandidateFactory {
 std::vector<CandidateFactory::Op> CandidateFactory::ops;
 
 
-void Candidate::dump(std::ostream& os) {
+void Candidate::dump(std::ostream& os) const {
   register unsigned work;
   for(int in = 0; in < (1 << Config::nIn); in++) {
     work = in;
-    for(Gene &g : gt)
+    for(const Gene &g : gt)
       work = g.apply(work);
     for(int i = 0; i < Config::cIn; i++) {
       for(int j = 0; j < Config::bIn; j++)

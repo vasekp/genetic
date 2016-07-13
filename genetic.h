@@ -127,7 +127,7 @@ class Population : private std::vector<Candidate> {
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
    * preferred, see discussion in Config above. */
-  Candidate& rankSelect(float bias = Config::selectBias) {
+  const Candidate& rankSelect(float bias = Config::selectBias) {
     ensureSorted();
     float x = (std::uniform_real_distribution<float>(0, 1))(Context::rng);
     if(x == 1)
@@ -139,7 +139,7 @@ class Population : private std::vector<Candidate> {
   /* Returns unconditionally the best candidate of population. If more
    * candidates have equal best fitness the returned reference may be any of
    * them. */
-  Candidate& best() {
+  const Candidate& best() {
     ensureSorted();
     return this->front();
   }
