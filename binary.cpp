@@ -143,21 +143,52 @@ class Candidate: public ICandidate<float> {
 
 
 class CandidateFactory {
+  typedef std::function<Candidate()> GetF;
+
+  struct Op {
+    Candidate (*fun)(const GetF&);
+    float probRel;
+    float probCumm;
+  };
+
+  static std::vector<Op> ops;
+
   public:
-  static Candidate getNew(std::function<Candidate()> get) {
-    Candidate (*mutations[])(const Candidate&) = {m1, m2, m3, m4, m5, m6, m7};
-    //std::uniform_real_distribution<float> rDist(0, 1);
-    std::uniform_int_distribution<> rDist(0, 7);
-    int which = rDist(Context::rng);
-    if(which < 7)
-      return mutations[which](get());
-    else
-      return crossover(get(), get());
+  static Candidate getNew(const GetF& get) {
+    std::uniform_real_distribution<float> rDist(0, 1);
+    float x = rDist(Context::rng);
+    int which = 0;
+    while(ops[which].probCumm < x)
+      which++;
+    return ops[which].fun(get);
+  }
+
+  static void init() {
+    ops = std::vector<Op>{
+      {mAlterTarget,  1.5},
+      {mAlterControl, 1.5},
+      {mAddSlice,     2.0},
+      {mAddPair,      3.0},
+      {mDeleteSlice,  2.0},
+      {mSplitSwap2,   3.0},
+      {mSplitSwap4,   3.5},
+      {mReverseSlice, 3.0},
+      {crossover1,    4.0},
+      {crossover2,    4.0}
+    };
+
+    float cumm = 0;
+    for(auto &op : ops) {
+      cumm += op.probRel;
+      op.probCumm = cumm;
+    }
+    for(auto &op : ops)
+      op.probCumm /= cumm;
   }
 
   private:
-  /* Alter target in one gene */
-  static Candidate m1(const Candidate& p) {
+  static Candidate mAlterTarget(const GetF& get) {
+    auto p = get();
     auto gm = p.gt;
     if(gm.size() == 0)
       return p;
@@ -168,8 +199,8 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Alter control in one gene */
-  static Candidate m2(const Candidate& p) {
+  static Candidate mAlterControl(const GetF& get) {
+    auto p = get();
     auto gm = p.gt;
     if(gm.size() == 0)
       return p;
@@ -180,8 +211,8 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Add a random operation sequence */
-  static Candidate m3(const Candidate& p) {
+  static Candidate mAddSlice(const GetF& get) {
+    auto p = get();
     auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size());
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
@@ -195,8 +226,8 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Add an operation pair */
-  static Candidate m4(const Candidate& p) {
+  static Candidate mAddPair(const GetF& get) {
+    auto p = get();
     auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size());
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
@@ -212,8 +243,8 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Delete a random slice */
-  static Candidate m5(const Candidate& p) {
+  static Candidate mDeleteSlice(const GetF& get) {
+    auto p = get();
     auto gm = p.gt;
     if(gm.size() == 0)
       return p;
@@ -227,8 +258,8 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Permute gates (split & swap) */
-  static Candidate m6(const Candidate& p) {
+  static Candidate mSplitSwap2(const GetF& get) {
+    auto p = get();
     if(p.gt.size() == 0)
       return p;
     std::uniform_int_distribution<> dPos(0, p.gt.size());
@@ -238,8 +269,26 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* Reverse order of a subsequence of gates */
-  static Candidate m7(const Candidate& p) {
+  static Candidate mSplitSwap4(const GetF& get) {
+    auto p = get();
+    if(p.gt.size() == 0)
+      return p;
+    std::uniform_int_distribution<> dPos(0, p.gt.size());
+    int pos1 = dPos(Context::rng),
+        pos2 = dPos(Context::rng),
+        pos3 = dPos(Context::rng);
+    if(pos2 < pos1) std::swap(pos1, pos2);
+    if(pos3 < pos1) std::swap(pos1, pos3);
+    if(pos3 < pos2) std::swap(pos2, pos3);
+    std::vector<Gene> gm(p.gt.begin(), p.gt.end() + pos1);
+    gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
+    gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
+    gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
+    return Candidate(gm);
+  }
+
+  static Candidate mReverseSlice(const GetF& get) {
+    auto p = get();
     int sz = p.gt.size();
     if(sz == 0)
       return p;
@@ -254,8 +303,9 @@ class CandidateFactory {
     return Candidate(gm);
   }
 
-  /* One-point crossover */
-  static Candidate crossover(const Candidate& p1, const Candidate& p2) {
+  static Candidate crossover1(const GetF& get) {
+    auto p1 = get(),
+         p2 = get();
     auto gt1 = p1.gt,
          gt2 = p2.gt;
     std::uniform_int_distribution<> dPos1(0, gt1.size()), dPos2(0, gt2.size());
@@ -265,7 +315,27 @@ class CandidateFactory {
     gm.insert(gm.end(), gt2.begin() + pos2, gt2.end());
     return Candidate(gm);
   }
+
+  static Candidate crossover2(const GetF& get) {
+    auto p1 = get(),
+         p2 = get();
+    auto gt1 = p1.gt,
+         gt2 = p2.gt;
+    std::uniform_int_distribution<> dPos1(0, gt1.size()), dPos2(0, gt2.size());
+    int pos1l = dPos1(Context::rng),
+        pos1r = dPos1(Context::rng),
+        pos2l = dPos2(Context::rng),
+        pos2r = dPos2(Context::rng);
+    if(pos1r < pos1l) std::swap(pos1l, pos1r);
+    if(pos2r < pos2l) std::swap(pos2l, pos2r);
+    std::vector<Gene> gm(gt1.begin(), gt1.begin() + pos1l);
+    gm.insert(gm.end(), gt2.begin() + pos2l, gt2.begin() + pos2r);
+    gm.insert(gm.end(), gt1.begin() + pos1r, gt1.end());
+    return Candidate(gm);
+  }
 };
+
+std::vector<CandidateFactory::Op> CandidateFactory::ops;
 
 
 void Candidate::dump(std::ostream& os) {
@@ -309,6 +379,7 @@ void Candidate::dump(std::ostream& os) {
 int main() {
   Context::rng = std::mt19937((std::random_device())());
   Colours::use = isatty(1);
+  CandidateFactory::init();
 
   Population<Candidate> pop(Config::popSize);
   {
