@@ -1,6 +1,7 @@
 #include <iostream>
 #include <random>
 #include <functional>
+#include "unistd.h"
 
 #include "genetic.h"
 
@@ -8,8 +9,8 @@ std::mt19937 Context::rng;
 
 namespace Config {
   const float selectBias = 1;
-  const int popSize = 1000;
-  const int popSize2 = 3000;
+  const int popSize = 2000;
+  const int popSize2 = 5000;
   const int nGen = 500;
 
   const float expLengthIni = 100;
@@ -21,7 +22,7 @@ namespace Config {
   const int bIn = 5;
   const int cIn = 1;
   const int nIn = bIn * cIn;
-  const int nOut = 1;
+  const int nOut = 3;
   const int nAnc = 0;
   const int nBit = nIn + nOut + nAnc;
 
@@ -35,6 +36,16 @@ namespace Config {
     //return (ins[0] * ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
+
+namespace Colours {
+  bool use;
+
+  const char* bold() { return use ? "\033[1m" : ""; }
+  const char* warn() { return use ? "\033[1;33m" : ""; }
+  const char* error() { return use ? "\033[1;31m" : ""; }
+  const char* highlight() { return use ? "\033[1;32m" : ""; }
+  const char* reset() { return use ? "\033[0m" : ""; }
+};
 
 
 class Gene {
@@ -88,9 +99,8 @@ class Candidate: public ICandidate<float> {
   Candidate(std::vector<Gene> _gt): gt(_gt) { }
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
-    os << c.fitness() << ':';
-    for(Gene g : c.gt)
-      os << ' ' << g;
+    for(auto it = c.gt.begin(); it != c.gt.end(); it++)
+      os << (it == c.gt.begin() ? "" : " ") << *it;
     return os;
   }
 
@@ -276,7 +286,7 @@ void Candidate::dump(std::ostream& os) {
         bool bW = (work & (1 << ((i+1)*Config::bIn - 1 - j)))?1:0;
         bool bI = (in & (1 << ((i+1)*Config::bIn - 1 - j)))?1:0;
         if(bW != bI)
-          os << "\033[1;31m" << bW << "\033[0m";
+          os << Colours::error() << bW << Colours::reset();
         else
           os << bW;
       }
@@ -288,7 +298,7 @@ void Candidate::dump(std::ostream& os) {
       bool bW = (work & (1 << j))?1:0;
       bool bC = (cmp & (1 << j))?1:0;
       if(bW != bC)
-        os << "\033[1;33m" << bW << "\033[0m";
+        os << Colours::warn() << bW << Colours::reset();
       else
         os << bW;
     }
@@ -299,6 +309,7 @@ void Candidate::dump(std::ostream& os) {
 
 int main() {
   Context::rng = std::mt19937((std::random_device())());
+  Colours::use = isatty(1);
 
   Population<Candidate> pop;
   {
@@ -327,9 +338,11 @@ int main() {
         });
     Population<Candidate>::Stat stat = pop.stat();
 
-    std::cout << "Gen " << gen << ": "
+    Candidate best = pop.best();
+    std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
-      "best of pop " << pop.best() << std::endl;
+      "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
+      ": " << best << std::endl;
   }
   pop.best().dump(std::cout);
 }
