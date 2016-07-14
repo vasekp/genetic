@@ -3,6 +3,7 @@
 #include <functional>
 #include <thread>
 #include <unistd.h> // isatty()
+#include <mutex>
 
 #include "genetic.h"
 
@@ -27,8 +28,6 @@ namespace Config {
   const int nOut = 3;
   const int nAnc = 0;
   const int nBit = nIn + nOut + nAnc;
-
-  const int nThreads = 4;
 
   unsigned f(unsigned in) {
     unsigned ins[cIn];
@@ -399,31 +398,32 @@ int main() {
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
-    /* Create popSize2 children and admix parents */
-    Population<Candidate> pop2;
+    /* Create popSize2 children in parallel and admix parents */
+    Population<Candidate> pop2(Config::popSize + Config::popSize2);
+    std::mutex popMutex;
     {
-      std::vector<Population<Candidate>> pops(Config::nThreads);
       std::vector<std::thread> tasks;
 
       /* This is to ensure that std::sort won't be called from the threads */
       pop.ensureSorted();
-      for(int k = 0; k < Config::nThreads; k++)
-        /* Each thread contributes popSize2/nThreads children. This is subject
-         * to rounding errors but we don't care that much about exact numbers. */
-        tasks.push_back(std::thread([&, k] {
-            pops[k].add(Config::popSize2/Config::nThreads, [&] {
-              return CandidateFactory::getNew([&] {
-                    return pop.rankSelect();
-                  });
-              });
-            pops[k].precomputeFitnesses();
-          }));
-
+      /* Split the work between a max number of threads */
+      for(size_t k = 0; k < std::thread::hardware_concurrency(); k++)
+        tasks.push_back(std::thread([&]
+            {
+              while(true) {
+                Candidate c = CandidateFactory::getNew([&] { return pop.rankSelect(); });
+                c.fitness();  // skip lazy evaluation
+                {
+                  std::lock_guard<std::mutex> lock(popMutex);
+                  if(pop2.size() < Config::popSize2)
+                    pop2.add(std::move(c));
+                  else
+                    break;
+                }
+              }
+            }));
       for(auto &task : tasks)
         task.join();
-
-      for(auto pp : pops)
-        pop2.merge(pp);
     }
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.merge(pop);

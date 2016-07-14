@@ -96,6 +96,12 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
+  /* Pushes back a new candidate using the move semantics. */
+  void add(Candidate&& c) {
+    this->push_back(std::forward<Candidate>(c));
+    sorted = false;
+  }
+
   /* Draws n candidates from a source function. */
   void add(size_t count, std::function<Candidate()> src) {
     this->reserve(size() + count);
