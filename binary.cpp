@@ -433,7 +433,7 @@ int main() {
     
     /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize-1, 
-        (std::function<const Candidate&()>) [&]() -> const Candidate& {
+        [&]() -> const Candidate& {
           return pop2.rankSelect(Config::trimBias);
         });
 

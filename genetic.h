@@ -86,12 +86,8 @@ class Population : private std::vector<Candidate> {
   }
 
   /* Draws a population from a source function. */
-  Population(size_t count, std::function<Candidate()> src) {
-    add(count, src);
-  }
-
-  /* Draws a population from a source function. */
-  Population(size_t count, std::function<const Candidate&()> src) {
+  template<class F>
+  Population(size_t count, F src) {
     add(count, src);
   }
 
@@ -107,8 +103,14 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
-  /* Draws n candidates from a source function (returning value). */
-  void add(size_t count, std::function<Candidate()> src) {
+  /* Draws n candidates from a source function
+   * F can be:
+   * - std::function<Candidate>: returning by copy
+   * - std::function<const Candidate&>: returning by reference
+   * - lambda returning either
+   * The template allows for optimizations (inlining) in the latter case. */
+  template<class F>
+  void add(size_t count, F src) {
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
       this->push_back(src());
