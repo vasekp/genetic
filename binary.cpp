@@ -107,7 +107,9 @@ class Candidate: public ICandidate<float> {
   public:
   Candidate() = default;
 
-  Candidate(std::vector<Gene> _gt): gt(_gt) { }
+  Candidate(std::vector<Gene> &_gt) = delete;
+
+  Candidate(std::vector<Gene> &&_gt): gt(std::move(_gt)) { }
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
     for(auto it = c.gt.begin(); it != c.gt.end(); it++)
@@ -143,7 +145,7 @@ class Candidate: public ICandidate<float> {
 
 
 class CandidateFactory {
-  typedef std::function<Candidate()> GetF;
+  typedef std::function<const Candidate&()> GetF;
 
   struct Op {
     Candidate (*fun)(const GetF&);
@@ -188,31 +190,31 @@ class CandidateFactory {
 
   private:
   static Candidate mAlterTarget(const GetF& get) {
-    auto p = get();
-    auto gm = p.gt;
-    if(gm.size() == 0)
+    auto &p = get();
+    if(p.gt.size() == 0)
       return p;
+    auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size() - 1);
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
     int pos = dPos(Context::rng);
     gm[pos] = Gene(dTgt(Context::rng), gm[pos].control());
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mAlterControl(const GetF& get) {
-    auto p = get();
-    auto gm = p.gt;
-    if(gm.size() == 0)
+    auto &p = get();
+    if(p.gt.size() == 0)
       return p;
+    auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size() - 1);
     std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     int pos = dPos(Context::rng);
     gm[pos] = Gene(gm[pos].target(), dCtrl(Context::rng));
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mAddSlice(const GetF& get) {
-    auto p = get();
+    auto &p = get();
     auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size());
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
@@ -223,11 +225,11 @@ class CandidateFactory {
     do {
       gm.insert(gm.begin() + pos, Gene(dTgt(Context::rng), dCtrl(Context::rng)));
     } while(dProb(Context::rng) > probTerm);
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mAddPair(const GetF& get) {
-    auto p = get();
+    auto &p = get();
     auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size());
     std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
@@ -240,14 +242,14 @@ class CandidateFactory {
              ctrl = dCtrl(Context::rng);
     gm.insert(gm.begin() + pos2, Gene(tgt, ctrl));
     gm.insert(gm.begin() + pos1, Gene(tgt, ctrl));
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mDeleteSlice(const GetF& get) {
-    auto p = get();
-    auto gm = p.gt;
-    if(gm.size() == 0)
+    auto &p = get();
+    if(p.gt.size() == 0)
       return p;
+    auto gm = p.gt;
     std::uniform_int_distribution<> dPos(0, gm.size());
     std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     int pos1 = dPos(Context::rng),
@@ -255,22 +257,22 @@ class CandidateFactory {
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     gm.erase(gm.begin() + pos1, gm.begin() + pos2);
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mSplitSwap2(const GetF& get) {
-    auto p = get();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     std::uniform_int_distribution<> dPos(0, p.gt.size());
     int pos = dPos(Context::rng);
     std::vector<Gene> gm(p.gt.begin() + pos, p.gt.end());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mSplitSwap4(const GetF& get) {
-    auto p = get();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     std::uniform_int_distribution<> dPos(0, p.gt.size());
@@ -284,11 +286,11 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate mReverseSlice(const GetF& get) {
-    auto p = get();
+    auto &p = get();
     int sz = p.gt.size();
     if(sz == 0)
       return p;
@@ -300,27 +302,27 @@ class CandidateFactory {
     std::vector<Gene> gm(p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.rbegin() + sz - pos2, p.gt.rbegin() + sz - pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate crossover1(const GetF& get) {
-    auto p1 = get(),
-         p2 = get();
-    auto gt1 = p1.gt,
-         gt2 = p2.gt;
+    auto &p1 = get(),
+         &p2 = get();
+    auto &gt1 = p1.gt,
+         &gt2 = p2.gt;
     std::uniform_int_distribution<> dPos1(0, gt1.size()), dPos2(0, gt2.size());
     int pos1 = dPos1(Context::rng),
         pos2 = dPos2(Context::rng);
     std::vector<Gene> gm(gt1.begin(), gt1.begin() + pos1);
     gm.insert(gm.end(), gt2.begin() + pos2, gt2.end());
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 
   static Candidate crossover2(const GetF& get) {
-    auto p1 = get(),
-         p2 = get();
-    auto gt1 = p1.gt,
-         gt2 = p2.gt;
+    auto &p1 = get(),
+         &p2 = get();
+    auto &gt1 = p1.gt,
+         &gt2 = p2.gt;
     std::uniform_int_distribution<> dPos1(0, gt1.size()), dPos2(0, gt2.size());
     int pos1l = dPos1(Context::rng),
         pos1r = dPos1(Context::rng),
@@ -331,7 +333,7 @@ class CandidateFactory {
     std::vector<Gene> gm(gt1.begin(), gt1.begin() + pos1l);
     gm.insert(gm.end(), gt2.begin() + pos2l, gt2.begin() + pos2r);
     gm.insert(gm.end(), gt1.begin() + pos1r, gt1.end());
-    return Candidate(gm);
+    return Candidate(std::move(gm));
   }
 };
 
@@ -392,7 +394,7 @@ int main() {
       do {
         gt.push_back(Gene(dTgt(Context::rng), dCtrl(Context::rng)));
       } while(rDist(Context::rng) > probTerm);
-      pop.add(Candidate(gt));
+      pop.add(Candidate(std::move(gt)));
     }
   }
 
@@ -411,7 +413,7 @@ int main() {
         tasks.push_back(std::thread([&]
             {
               while(true) {
-                Candidate c = CandidateFactory::getNew([&] { return pop.rankSelect(); });
+                Candidate c = CandidateFactory::getNew([&]() -> const Candidate& { return pop.rankSelect(); });
                 c.fitness();  // skip lazy evaluation
                 {
                   std::lock_guard<std::mutex> lock(popMutex);
@@ -425,11 +427,13 @@ int main() {
       for(auto &task : tasks)
         task.join();
     }
+
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.merge(pop);
-
+    
     /* Rank-trim down to popSize */
-    pop = Population<Candidate>(Config::popSize-1, [&] {
+    pop = Population<Candidate>(Config::popSize-1, 
+        (std::function<const Candidate&()>) [&]() -> const Candidate& {
           return pop2.rankSelect(Config::trimBias);
         });
 
@@ -437,7 +441,7 @@ int main() {
     pop.add(pop2.best());
 
     /* Summarize */
-    Candidate best = pop.best();
+    const Candidate &best = pop.best();
     Population<Candidate>::Stat stat = pop.stat();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "

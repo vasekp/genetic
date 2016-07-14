@@ -90,6 +90,11 @@ class Population : private std::vector<Candidate> {
     add(count, src);
   }
 
+  /* Draws a population from a source function. */
+  Population(size_t count, std::function<const Candidate&()> src) {
+    add(count, src);
+  }
+
   /* Pushes back a new candidate. */
   void add(const Candidate& c) {
     this->push_back(c);
@@ -102,11 +107,20 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
-  /* Draws n candidates from a source function. */
+  /* Draws n candidates from a source function (returning value). */
   void add(size_t count, std::function<Candidate()> src) {
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
-      add(src());
+      this->push_back(src());
+    sorted = false;
+  }
+
+  /* Draws n candidates from a source function (returning reference). */
+  void add(size_t count, std::function<const Candidate&()> src) {
+    this->reserve(size() + count);
+    for(size_t j = 0; j < count; j++)
+      this->push_back(src());
+    sorted = false;
   }
 
   /* Takes all candidates from another population. */
