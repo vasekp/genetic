@@ -5,7 +5,11 @@ CXXFLAGS += -Wall -fno-diagnostics-show-caret -std=c++11 -pthread
 
 all: CXXFLAGS += -O3
 debug: CXXFLAGS += -g
-all debug: $(PROGS)
+optdebug: CXXFLAGS += -O3 -g
+profile: CXXFLAGS += -O1 -pg
+optprofile: CXXFLAGS += -O3 -pg
+
+all debug optdebug profile optprofile: $(PROGS)
 
 clean:
 	rm $(PROGS)
