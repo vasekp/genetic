@@ -5,9 +5,9 @@
 
 #include "genetic.h"
 
-std::mt19937 Context::rng;
-
 namespace Context {
+  std::mt19937 rng;
+
   std::vector<std::string> dbAccept;  /* strings to be accepted */
   std::vector<std::string> dbReject;  /* strings to be rejected */
   std::vector<std::regex> qchecks;    /* quick validity checks */
@@ -166,9 +166,9 @@ int main() {
     for(int j = 0; j < Config::popSize2; j++)
       /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
       if(rDist(Context::rng) < Config::pCrossover)
-        pop2.add(Candidate::crossover(pop.rankSelect(), pop.rankSelect()));
+        pop2.add(Candidate::crossover(pop.rankSelect(Context::rng), pop.rankSelect(Context::rng)));
       else
-        pop2.add(Candidate::mutate(pop.rankSelect()));
+        pop2.add(Candidate::mutate(pop.rankSelect(Context::rng)));
     pop2.trim();
     pop = pop2;
 

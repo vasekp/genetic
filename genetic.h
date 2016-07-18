@@ -7,10 +7,6 @@
 /* Exactly one source file needs to define these quantities
  * (more can be declared there). */
 
-namespace Context {
-  extern std::mt19937 rng;
-};
-
 namespace Config {
   /* > 0. This tunes rank-based selection. Zero would mean no account on
    * fitness in the selection process whatsoever. The bigger the value the
@@ -23,8 +19,6 @@ namespace Config {
 };
 
 /* Example:
- * std::mt19937 Context::rng;
- * 
  * namespace Config {
  *   const float selectBias = 1.0;
  *   const float pCrossover = 0.7;
@@ -32,10 +26,6 @@ namespace Config {
  *   const int popSize2 = 30;
  *   const int nGen = 50;
  * }
- *
- * in main():
- * 
- * Context::rng = std::mt19937((std::random_device())());
  */
 
 
@@ -149,9 +139,11 @@ class Population : private std::vector<Candidate> {
   /* Retrieves a candidate randomly chosen by rank-based selection,
    * Config::selectBias determines how much low-fitness solutions are
    * preferred, see discussion in Config above. */
-  const Candidate& rankSelect(float bias = Config::selectBias) {
+  template<class T>
+  const Candidate& rankSelect(T& rng, float bias = Config::selectBias) {
+    static std::uniform_real_distribution<float> rDist(0, 1);
     ensureSorted();
-    float x = (std::uniform_real_distribution<float>(0, 1))(Context::rng);
+    float x = rDist(rng);
     if(x == 1)
       return this->back();
     else
