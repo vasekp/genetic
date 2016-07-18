@@ -4,6 +4,7 @@
 #include <thread>
 #include <unistd.h> // isatty()
 #include <mutex>
+#include <chrono>
 
 #include "genetic.h"
 
@@ -146,6 +147,7 @@ class Candidate: public ICandidate<float> {
 
 class CandidateFactory {
   typedef std::function<const Candidate&()> GetF;
+  static unsigned long total;
 
   struct Op {
     Candidate (*fun)(const GetF&);
@@ -156,12 +158,26 @@ class CandidateFactory {
   static std::vector<Op> ops;
 
   public:
+  static Candidate genInit() {
+    static float probTerm = 1/Config::expLengthIni; // probability of termination; expLength = expected number of genes
+    static std::uniform_real_distribution<float> rDist(0, 1);
+    static std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
+    static std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
+    std::vector<Gene> gt;
+    do {
+      gt.push_back(Gene(dTgt(Context::rng), dCtrl(Context::rng)));
+    } while(rDist(Context::rng) > probTerm);
+    total++;
+    return Candidate(std::move(gt));
+  }
+
   static Candidate getNew(const GetF& get) {
     std::uniform_real_distribution<float> rDist(0, 1);
     float x = rDist(Context::rng);
     int which = 0;
     while(ops[which].probCumm < x)
       which++;
+    total++;
     return ops[which].fun(get);
   }
 
@@ -186,6 +202,12 @@ class CandidateFactory {
     }
     for(auto &op : ops)
       op.probCumm /= cumm;
+
+    total = 0;
+  }
+
+  static unsigned long getCount() {
+    return total;
   }
 
   private:
@@ -338,6 +360,7 @@ class CandidateFactory {
 };
 
 std::vector<CandidateFactory::Op> CandidateFactory::ops;
+unsigned long CandidateFactory::total;
 
 
 void Candidate::dump(std::ostream& os) const {
@@ -383,20 +406,10 @@ int main() {
   Colours::use = isatty(1);
   CandidateFactory::init();
 
-  Population<Candidate> pop(Config::popSize);
-  {
-    float probTerm = 1/Config::expLengthIni; // probability of termination; expLength = expected number of genes
-    std::uniform_real_distribution<float> rDist(0, 1);
-    std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
-    std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
-    for(int i = 0; i < Config::popSize; i++) {
-      std::vector<Gene> gt;
-      do {
-        gt.push_back(Gene(dTgt(Context::rng), dCtrl(Context::rng)));
-      } while(rDist(Context::rng) > probTerm);
-      pop.add(Candidate(std::move(gt)));
-    }
-  }
+  std::chrono::time_point<std::chrono::steady_clock> pre, post;
+  pre = std::chrono::steady_clock::now();
+
+  Population<Candidate> pop(Config::popSize, CandidateFactory::genInit);
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
@@ -448,6 +461,11 @@ int main() {
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
       ": " << best << std::endl;
   }
+
+  post = std::chrono::steady_clock::now();
+  std::chrono::duration<double> dur = post - pre;
+  std::cout << std::endl << "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
+    CandidateFactory::getCount() << " candidates tested, best of run:" << std::endl;
 
   /* List the best-of-run candidate */
   pop.best().dump(std::cout);
