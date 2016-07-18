@@ -172,7 +172,7 @@ class CandidateFactory {
   }
 
   static Candidate getNew(const GetF& get) {
-    std::uniform_real_distribution<float> rDist(0, 1);
+    static std::uniform_real_distribution<float> rDist(0, 1);
     float x = rDist(Context::rng);
     int which = 0;
     while(ops[which].probCumm < x)
@@ -216,8 +216,8 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
+    static std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
     std::uniform_int_distribution<> dPos(0, gm.size() - 1);
-    std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
     int pos = dPos(Context::rng);
     gm[pos] = Gene(dTgt(Context::rng), gm[pos].control());
     return Candidate(std::move(gm));
@@ -228,8 +228,8 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
+    static std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     std::uniform_int_distribution<> dPos(0, gm.size() - 1);
-    std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     int pos = dPos(Context::rng);
     gm[pos] = Gene(gm[pos].target(), dCtrl(Context::rng));
     return Candidate(std::move(gm));
@@ -238,10 +238,10 @@ class CandidateFactory {
   static Candidate mAddSlice(const GetF& get) {
     auto &p = get();
     auto gm = p.gt;
+    static std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
+    static std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
+    static std::uniform_real_distribution<> dProb(0, 1);
     std::uniform_int_distribution<> dPos(0, gm.size());
-    std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
-    std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
-    std::uniform_real_distribution<> dProb(0, 1);
     int pos = dPos(Context::rng);
     float probTerm = 1/Config::expLengthAdd;
     do {
@@ -253,9 +253,9 @@ class CandidateFactory {
   static Candidate mAddPair(const GetF& get) {
     auto &p = get();
     auto gm = p.gt;
+    static std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
+    static std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     std::uniform_int_distribution<> dPos(0, gm.size());
-    std::uniform_int_distribution<> dTgt(0, Config::nBit - 1);
-    std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     int pos1 = dPos(Context::rng),
         pos2 = dPos(Context::rng);
     if(pos2 < pos1)
@@ -272,8 +272,8 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
+    static std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     std::uniform_int_distribution<> dPos(0, gm.size());
-    std::uniform_int_distribution<> dCtrl(0, (1 << (Config::nBit-1)) - 1);
     int pos1 = dPos(Context::rng),
         pos2 = dPos(Context::rng);
     if(pos2 < pos1)
@@ -421,12 +421,13 @@ int main() {
 
       /* This is to ensure that std::sort won't be called from the threads */
       pop.ensureSorted();
+      auto getF = [&]() -> const Candidate& { return pop.rankSelect(); };
       /* Split the work between a max number of threads */
       for(size_t k = 0; k < std::thread::hardware_concurrency(); k++)
         tasks.push_back(std::thread([&]
             {
               while(true) {
-                Candidate c = CandidateFactory::getNew([&]() -> const Candidate& { return pop.rankSelect(); });
+                Candidate c = CandidateFactory::getNew(getF);
                 c.fitness();  // skip lazy evaluation
                 {
                   std::lock_guard<std::mutex> lock(popMutex);
