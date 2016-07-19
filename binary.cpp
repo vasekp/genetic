@@ -134,7 +134,7 @@ class Candidate: public ICandidate<float> {
     }
     float penalty = gt.size()*Config::pLength;
     for(const Gene &g : gt) {
-      unsigned h = hamming(g.control(), Config::nBit - 1);
+      unsigned h = hamming(g.control(), Config::nBit);
       penalty += h*h*Config::pControl;
     }
     Context::count++;
@@ -187,7 +187,7 @@ class CandidateFactory {
   };
 
   public:
-  CandidateFactory(rng_t& _rng, Source&& _src = nullptr):
+  CandidateFactory(rng_t _rng, Source&& _src = nullptr):
     rng(_rng),
     src(std::move(_src)),
     dUni(0, 1),
@@ -288,7 +288,7 @@ class CandidateFactory {
     if(pos2 < pos1) std::swap(pos1, pos2);
     if(pos3 < pos1) std::swap(pos1, pos3);
     if(pos3 < pos2) std::swap(pos2, pos3);
-    std::vector<Gene> gm(p.gt.begin(), p.gt.end() + pos1);
+    std::vector<Gene> gm(p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
@@ -383,11 +383,11 @@ int main() {
   rng_t rngMain((std::random_device())());
   Colours::use = isatty(1);
   Context::count = 0;
+  CandidateFactory init(rngMain);
 
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
   pre = std::chrono::steady_clock::now();
 
-  CandidateFactory init(rngMain);
   Population<Candidate> pop(Config::popSize, [&] { return init.genInit(); });
 
   for(int gen = 0; gen < Config::nGen; gen++) {
@@ -400,20 +400,21 @@ int main() {
       std::vector<std::thread> tasks;
       std::vector<CandidateFactory> cf;
       size_t nThreads = std::thread::hardware_concurrency();
-
-      /* Prepare a separate CandidateFactory for each thread so that random
-       * number generator calls won't clash */
-      for(size_t k = 0; k < nThreads; k++) {
-        rng_t rngThread(rngMain());
-        cf.push_back({rngThread,
-            [&pop, rngThread]() mutable -> const Candidate& { return pop.rankSelect(rngThread); }});
-      }
+      cf.reserve(nThreads);
 
       /* This is to ensure that std::sort won't be called from the threads */
       pop.ensureSorted();
 
       /* Split the work between a max number of threads */
-      for(size_t k = 0; k < nThreads; k++)
+      for(size_t k = 0; k < nThreads; k++) {
+
+        /* Prepare a separate CandidateFactory for each thread so that random
+         * number generator calls won't clash */
+        rng_t rngThread(rngMain());
+        cf.push_back({rngThread,
+            [&pop, rngThread]() mutable -> const Candidate& { return pop.rankSelect(rngThread); }});
+
+        /* Let each thread keep adding candidates until the goal is met */
         tasks.push_back(std::thread([&, k]
             {
               while(true) {
@@ -428,6 +429,7 @@ int main() {
                 }
               }
             }));
+      }
       for(auto &task : tasks)
         task.join();
     }
