@@ -14,14 +14,14 @@ namespace Context {
 }
 
 namespace Config {
-  const float selectBias = 2.0;
-  const float trimBias = 2.0;
+  const float selectBias = 1.6;
+  const float trimBias = 2.5;
   const int popSize = 10000;
   const int popSize2 = 30000;
   const int nGen = 500;
 
   const float expLengthIni = 30;    // expected length of circuits in 0th generation
-  const float expLengthAdd = 10;    // expected length of gates inserted in mutation
+  const float expLengthAdd = 3;     // expected length of gates inserted in mutation
   const float pIn = 10;             // penalty for leaving input register modified (= error)
   const float pLength = 1/10000.0;  // penalty for number of gates
   const float pControl = 1/3000.0;  // penalty for control (quadratic in number of C-ing bits)
