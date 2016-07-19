@@ -16,18 +16,22 @@ namespace Context {
     "abcdefghijklmnopqrstuvwxyz"
     ".........................."
     ".........................."
-    ".........................."  /* . is 3× more likely than a letter */
-    "????????||||||||||        "; /* space is 8× more likely than any single letter */
+    ".........................."    /* . is 3× more likely than a letter */
+    "????????||||||||||        ";   /* space is 8× more likely than any single letter */
+
+  void initDB(std::string fname);
+  void initQC(std::initializer_list<std::string> list);
 }
+
 
 namespace Config {
   const float selectBias = 1.0;
   const float pCrossover = 0.7;
   const int popSize = 500;
-  const int popSize2 = 300; /* number of children added to the population */
-  const int nGen = 300;     /* maximum number of generations in a run */
-  const float penalty = 1/2000.; /* for each character of length */
-  const float expLength = 50.0;  /* used in generating the initial population */
+  const int popSize2 = 300;       /* number of children added to the population */
+  const int nGen = 300;           /* maximum number of generations in a run */
+  const float penalty = 1/2000.;  /* for each character of length */
+  const float expLength = 50.0;   /* used in generating the initial population */
 }
 
 
@@ -64,7 +68,7 @@ class Candidate: public ICandidate<Fitness> {
   Candidate(std::string _reS): reS(_reS), valid(false) {
     try {
       /* Fails some quick check ⇒ considered not valid */
-      for(auto q : Context::qchecks)
+      for(auto &q : Context::qchecks)
         if(std::regex_search(reS, q))
           return;
       re = std::regex(reS, std::regex::extended | std::regex::optimize);
@@ -109,10 +113,10 @@ class Candidate: public ICandidate<Fitness> {
     if(!valid)
       return Fitness{-1, -1};
     int cntA = 0, cntR = 0;
-    for(auto str : Context::dbAccept)
+    for(auto &str : Context::dbAccept)
       if(!std::regex_match(str, re))
         cntA++;
-    for(auto str : Context::dbReject)
+    for(auto &str : Context::dbReject)
       if(std::regex_match(str, re))
         cntR++;
     return Fitness{cntA, cntR, reS.length()};
@@ -120,29 +124,35 @@ class Candidate: public ICandidate<Fitness> {
 };
 
 
+namespace Context {
+  void initDB(std::string fname) {
+    std::string r;
+    std::ifstream file(fname);
+    while(getline(file, r)) {
+      if(r == "---") break;
+      dbAccept.push_back(r);
+    }
+    while(getline(file, r))
+      dbReject.push_back(r);
+    Fitness::tAccept = dbAccept.size();
+    Fitness::tReject = dbReject.size();
+  }
+
+  void initQC(std::initializer_list<std::string> list) {
+    for(auto &s : list)
+      Context::qchecks.push_back(std::regex(s, std::regex::extended | std::regex::optimize));
+  }
+}
+
+
 int main() {
   Context::rng = std::mt19937((std::random_device())());
 
   /* Read the database */
-  {
-    std::string r;
-    std::ifstream file("regex.sz");
-    while(getline(file, r)) {
-      if(r == "---") break;
-      Context::dbAccept.push_back(r);
-    }
-    while(getline(file, r))
-      Context::dbReject.push_back(r);
-    Fitness::tAccept = Context::dbAccept.size();
-    Fitness::tReject = Context::dbReject.size();
-  }
+  Context::initDB("regex.sz");
 
   /* Prepare the quick validity checks */
-  {
-    std::vector<std::string> qchecksS { "[*+?][*+?]", "[^|]*[*+?][^|]*[*+?][^|]*[*+?]" };
-    for(auto s : qchecksS)
-      Context::qchecks.push_back(std::regex(s, std::regex::extended | std::regex::optimize));
-  }
+  Context::initQC({ "[*+?][*+?]", "[^|]*[*+?][^|]*[*+?][^|]*[*+?]" });
 
   /* Initialize the G0 population */
   Population<Candidate> pop;
@@ -150,35 +160,45 @@ int main() {
     float probTerm = 1/Config::expLength; /* probability of termination; expLength = expected length of strings */
     std::uniform_real_distribution<float> rDist(0, 1);
     std::uniform_int_distribution<> iDist(0, Context::pool.length());
-    for(int i = 0; i < Config::popSize; i++) {
-      std::vector<char> vec;
-      while(rDist(Context::rng) > probTerm)
-        vec.push_back(Context::pool[iDist(Context::rng)]);
-      std::string s(vec.begin(), vec.end());
-      pop.add(Candidate(s));
-    }
+    pop.add(Config::popSize, [&] {
+          std::vector<char> vec;
+          while(rDist(Context::rng) > probTerm)
+            vec.push_back(Context::pool[iDist(Context::rng)]);
+          return Candidate(std::string(vec.begin(), vec.end()));
+        });
   }
 
   /* The main loop: (l+m) rule */
   for(int gen = 0; gen < Config::nGen; gen++) {
-    Population<Candidate> pop2 = pop;
-    std::uniform_real_distribution<float> rDist(0, 1);
-    for(int j = 0; j < Config::popSize2; j++)
-      /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
-      if(rDist(Context::rng) < Config::pCrossover)
-        pop2.add(Candidate::crossover(pop.rankSelect(Context::rng), pop.rankSelect(Context::rng)));
-      else
-        pop2.add(Candidate::mutate(pop.rankSelect(Context::rng)));
-    pop2.trim();
-    pop = pop2;
+    {
+      std::uniform_real_distribution<float> rDist(0, 1);
 
+      /* Generate popSize2 children */
+      Population<Candidate> children(Config::popSize2, [&] {
+          /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
+          if(rDist(Context::rng) < Config::pCrossover)
+            return Candidate::crossover(pop.rankSelect(Context::rng), pop.rankSelect(Context::rng));
+          else
+            return Candidate::mutate(pop.rankSelect(Context::rng));
+        });
+
+      /* Merge with parents */
+      pop.merge(children);
+    }
+
+    /* Trim to popSize */
+    pop.trim();
+
+    /* Report summary */
     int cnt = 0;
-    for(auto c : pop)
+    for(auto &c : pop)
       if(c.isValid())
         cnt++;
-    auto best = pop.best();
+    auto &best = pop.best();
+    Population<Candidate>::Stat stat = pop.stat();
 
     std::cout << "Gen " << gen << ": " << cnt << " valid, "
+      << "fitness " << stat.mean << " ± " << stat.stdev << ", "
       << "best of pop: " << best.fitness()
       << "\t" << best.getRE() << std::endl;
   }
