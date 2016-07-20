@@ -4,31 +4,6 @@
 #include <type_traits>
 
 
-/* Exactly one source file needs to define these quantities
- * (more can be declared there). */
-
-namespace Config {
-  /* > 0. This tunes rank-based selection. Zero would mean no account on
-   * fitness in the selection process whatsoever. The bigger the value the
-   * more candidates with low fitness are likely to be selected. */
-  extern const float selectBias;
-
-  /* > 0. In this header file, this only serves the purpose of a default value
-   * to Population::trim(). */
-  extern const int popSize;
-};
-
-/* Example:
- * namespace Config {
- *   const float selectBias = 1.0;
- *   const float pCrossover = 0.7;
- *   const int popSize = 50;
- *   const int popSize2 = 30;
- *   const int nGen = 50;
- * }
- */
-
-
 /* The Candidate template. Needs a typename Fitness which can be a simple type
  * or a class but needs to implement operator<. The virtual implementation
  * only keeps track of whether fitness has been computed, and provides the
@@ -42,6 +17,8 @@ class ICandidate {
   public:
   typedef Fitness _FitnessType;
 
+  /* Returns this Candidate's fitness, calculating it on request if not known
+   * from before. */
   Fitness fitness() const {
     if(!fitnessValid) {
       _fitness = computeFitness();
@@ -55,6 +32,7 @@ class ICandidate {
   }
 
   private:
+  /* Every Candidate class must implement this routine. */
   virtual Fitness computeFitness() const = 0;
 };
 
@@ -136,11 +114,13 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::clear;
   using std::vector<Candidate>::operator[];
 
-  /* Retrieves a candidate randomly chosen by rank-based selection,
-   * Config::selectBias determines how much low-fitness solutions are
-   * preferred, see discussion in Config above. */
+  /* Retrieves a candidate randomly chosen by rank-based selection.
+   * selectBias > 0 determines how much low-fitness solutions are preferred.
+   * Zero would mean no account on fitness in the selection process
+   * whatsoever. The bigger the value the more candidates with low fitness are
+   * likely to be selected. */
   template<class T>
-  const Candidate& rankSelect(T& rng, float bias = Config::selectBias) {
+  const Candidate& rankSelect(T& rng, float bias) {
     static std::uniform_real_distribution<float> rDist(0, 1);
     ensureSorted();
     float x = rDist(rng);
@@ -160,7 +140,7 @@ class Population : private std::vector<Candidate> {
 
   /* Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
-  void trim(size_t newSize = Config::popSize) {
+  void trim(size_t newSize) {
     std::sort(begin(), end());
     sorted = true;
     if(size() > newSize)

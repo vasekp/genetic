@@ -413,7 +413,7 @@ int main() {
               /* Prepare a separate CandidateFactory for each thread so that random
                * number generator calls won't clash */
               rng_t rngThread(seed);
-              CandidateFactory cf(rngThread, [&]() -> const Candidate& { return pop.rankSelect(rngThread); });
+              CandidateFactory cf(rngThread, [&]() -> const Candidate& { return pop.rankSelect(rngThread, Config::selectBias); });
               while(true) {
                 Candidate c = cf.getNew();
                 c.fitness();  // skip lazy evaluation

@@ -177,9 +177,9 @@ int main() {
       Population<Candidate> children(Config::popSize2, [&] {
           /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
           if(rDist(Context::rng) < Config::pCrossover)
-            return Candidate::crossover(pop.rankSelect(Context::rng), pop.rankSelect(Context::rng));
+            return Candidate::crossover(pop.rankSelect(Context::rng, Config::selectBias), pop.rankSelect(Context::rng, Config::selectBias));
           else
-            return Candidate::mutate(pop.rankSelect(Context::rng));
+            return Candidate::mutate(pop.rankSelect(Context::rng, Config::selectBias));
         });
 
       /* Merge with parents */
@@ -187,7 +187,7 @@ int main() {
     }
 
     /* Trim to popSize */
-    pop.trim();
+    pop.trim(Config::popSize);
 
     /* Report summary */
     int cnt = 0;
