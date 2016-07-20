@@ -187,7 +187,7 @@ class CandidateFactory {
   };
 
   public:
-  CandidateFactory(rng_t _rng, Source&& _src = nullptr):
+  CandidateFactory(rng_t& _rng, Source&& _src = nullptr):
     rng(_rng),
     src(std::move(_src)),
     dUni(0, 1),
@@ -398,9 +398,7 @@ int main() {
     {
       std::mutex popMutex;
       std::vector<std::thread> tasks;
-      std::vector<CandidateFactory> cf;
       size_t nThreads = std::thread::hardware_concurrency();
-      cf.reserve(nThreads);
 
       /* This is to ensure that std::sort won't be called from the threads */
       pop.ensureSorted();
@@ -408,17 +406,16 @@ int main() {
       /* Split the work between a max number of threads */
       for(size_t k = 0; k < nThreads; k++) {
 
-        /* Prepare a separate CandidateFactory for each thread so that random
-         * number generator calls won't clash */
-        rng_t rngThread(rngMain());
-        cf.push_back({rngThread,
-            [&pop, rngThread]() mutable -> const Candidate& { return pop.rankSelect(rngThread); }});
-
+        auto seed = rngMain();
         /* Let each thread keep adding candidates until the goal is met */
-        tasks.push_back(std::thread([&, k]
+        tasks.push_back(std::thread([&, seed]
             {
+              /* Prepare a separate CandidateFactory for each thread so that random
+               * number generator calls won't clash */
+              rng_t rngThread(seed);
+              CandidateFactory cf(rngThread, [&]() -> const Candidate& { return pop.rankSelect(rngThread); });
               while(true) {
-                Candidate c = cf[k].getNew();
+                Candidate c = cf.getNew();
                 c.fitness();  // skip lazy evaluation
                 {
                   std::lock_guard<std::mutex> lock(popMutex);
