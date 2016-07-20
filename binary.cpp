@@ -105,6 +105,7 @@ class Candidate: public ICandidate<float> {
   public:
   Candidate() = default;
 
+  /* Suboptimal. This will make the compiler scream at me if I forget. */
   Candidate(std::vector<Gene> &_gt) = delete;
 
   Candidate(std::vector<Gene> &&_gt): gt(std::move(_gt)) { }
@@ -198,6 +199,7 @@ class CandidateFactory {
   Candidate genInit() {
     static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
     std::vector<Gene> gt;
+    gt.reserve(Config::expLengthIni);
     do {
       gt.push_back(Gene(dTgt(rng), dCtrl(rng)));
     } while(dUni(rng) > probTerm);
@@ -215,7 +217,7 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    int pos = rng() % gm.size();
+    int pos = rng() % p.gt.size();
     gm[pos] = Gene(dTgt(rng), gm[pos].control());
     return Candidate(std::move(gm));
   }
@@ -225,33 +227,43 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    int pos = rng() % gm.size();
+    int pos = rng() % p.gt.size();
     gm[pos] = Gene(gm[pos].target(), dCtrl(rng));
     return Candidate(std::move(gm));
   }
 
   Candidate mAddSlice() {
     auto &p = src();
-    auto gm = p.gt;
-    int pos = rng() % (gm.size() + 1);
+    int pos = rng() % (p.gt.size() + 1);
+    std::vector<Gene> ins;
+    ins.reserve(Config::expLengthAdd);
     double probTerm = 1/Config::expLengthAdd;
     do {
-      gm.insert(gm.begin() + pos, Gene(dTgt(rng), dCtrl(rng)));
+      ins.emplace_back(dTgt(rng), dCtrl(rng));
     } while(dUni(rng) > probTerm);
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size() + ins.size());
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
+    gm.insert(gm.end(), ins.begin(), ins.end());
+    gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
     return Candidate(std::move(gm));
   }
 
   Candidate mAddPair() {
     auto &p = src();
-    auto gm = p.gt;
-    int pos1 = rng() % (gm.size() + 1),
-        pos2 = rng() % (gm.size() + 1);
+    int pos1 = rng() % (p.gt.size() + 1),
+        pos2 = rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
+    std::vector<Gene> gm;
     unsigned tgt = dTgt(rng),
              ctrl = dCtrl(rng);
-    gm.insert(gm.begin() + pos2, Gene(tgt, ctrl));
-    gm.insert(gm.begin() + pos1, Gene(tgt, ctrl));
+    gm.reserve(p.gt.size() + 2);
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
+    gm.emplace_back(tgt, ctrl);
+    gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
+    gm.emplace_back(tgt, ctrl);
+    gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
     return Candidate(std::move(gm));
   }
 
@@ -259,12 +271,14 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    auto gm = p.gt;
-    int pos1 = rng() % (gm.size() + 1),
-        pos2 = rng() % (gm.size() + 1);
+    int pos1 = rng() % (p.gt.size() + 1),
+        pos2 = rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
-    gm.erase(gm.begin() + pos1, gm.begin() + pos2);
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size() - (pos2 - pos1));
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
+    gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
     return Candidate(std::move(gm));
   }
 
@@ -273,7 +287,9 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     int pos = rng() % (p.gt.size() + 1);
-    std::vector<Gene> gm(p.gt.begin() + pos, p.gt.end());
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size());
+    gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
     return Candidate(std::move(gm));
   }
@@ -288,7 +304,9 @@ class CandidateFactory {
     if(pos2 < pos1) std::swap(pos1, pos2);
     if(pos3 < pos1) std::swap(pos1, pos3);
     if(pos3 < pos2) std::swap(pos2, pos3);
-    std::vector<Gene> gm(p.gt.begin(), p.gt.begin() + pos1);
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size());
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
@@ -304,7 +322,9 @@ class CandidateFactory {
         pos2 = rng() % (sz + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
-    std::vector<Gene> gm(p.gt.begin(), p.gt.begin() + pos1);
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size());
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.rbegin() + sz - pos2, p.gt.rbegin() + sz - pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
     return Candidate(std::move(gm));
@@ -317,7 +337,9 @@ class CandidateFactory {
          &gt2 = p2.gt;
     int pos1 = rng() % (gt1.size() + 1),
         pos2 = rng() % (gt2.size() + 1);
-    std::vector<Gene> gm(gt1.begin(), gt1.begin() + pos1);
+    std::vector<Gene> gm;
+    gm.reserve(pos1 + (gt2.size() - pos2));
+    gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1);
     gm.insert(gm.end(), gt2.begin() + pos2, gt2.end());
     return Candidate(std::move(gm));
   }
@@ -333,7 +355,9 @@ class CandidateFactory {
         pos2r = rng() % (gt2.size() + 1);
     if(pos1r < pos1l) std::swap(pos1l, pos1r);
     if(pos2r < pos2l) std::swap(pos2l, pos2r);
-    std::vector<Gene> gm(gt1.begin(), gt1.begin() + pos1l);
+    std::vector<Gene> gm;
+    gm.reserve(gt1.size() - (pos1r - pos1l) + (pos2r - pos2r));
+    gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1l);
     gm.insert(gm.end(), gt2.begin() + pos2l, gt2.begin() + pos2r);
     gm.insert(gm.end(), gt1.begin() + pos1r, gt1.end());
     return Candidate(std::move(gm));
