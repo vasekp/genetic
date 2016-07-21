@@ -18,7 +18,11 @@ namespace Config {
   const float trimBias = 2.5;
   const int popSize = 10000;
   const int popSize2 = 30000;
+#ifdef BENCH
+  const int nGen = 100;
+#else
   const int nGen = 500;
+#endif
 
   const float expLengthIni = 30;    // expected length of circuits in 0th generation
   const float expLengthAdd = 3;     // expected length of gates inserted in mutation
@@ -404,7 +408,11 @@ void Candidate::dump(std::ostream& os) const {
 
 
 int main() {
+#ifdef BENCH
+  rng_t rngMain(1);
+#else
   rng_t rngMain((std::random_device())());
+#endif
   Colours::use = isatty(1);
   Context::count = 0;
   CandidateFactory init(rngMain);
@@ -422,7 +430,11 @@ int main() {
     {
       std::mutex popMutex;
       std::vector<std::thread> tasks;
+#ifdef BENCH
+      size_t nThreads = 1;
+#else
       size_t nThreads = std::thread::hardware_concurrency();
+#endif
 
       /* This is to ensure that std::sort won't be called from the threads */
       pop.ensureSorted();
