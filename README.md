@@ -1,10 +1,11 @@
 # Introduction
 
 This is a simple genetic algorithm framework written in C++11 and intending to 
-be generic and simple to use. The encoding, and indeed any internal structure 
-of the candidate and fitness, are completely up to the particular 
-implementation. At the moment a total ordering of candidates must be 
-available, however, limiting the use to single-objective optimization schemes.
+be generic, thread-safe and simple to use. The encoding, and indeed any 
+internal structure of the candidate and fitness, are completely up to the 
+particular implementation. At the moment a total ordering of candidates must 
+be available, however, limiting the use to single-objective optimization 
+schemes.
 
 The header currently declares a virtual ICandidate class template, meant to be 
 specialized and derived from, and a Population class template supporting 

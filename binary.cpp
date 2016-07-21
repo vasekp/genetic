@@ -9,7 +9,7 @@
 
 #include "genetic.h"
 
-namespace Context {
+namespace GlobalContext {
   std::atomic_uint count;
 }
 
@@ -146,7 +146,7 @@ class Candidate: public ICandidate<float> {
       unsigned h = hamming(g.control(), Config::nBit);
       penalty += h*h*Config::pControl;
     }
-    Context::count++;
+    GlobalContext::count++;
     return mism + penalty;
   }
 
@@ -416,7 +416,7 @@ int main() {
   ThreadContext::rng = ThreadContext::rng_t((std::random_device())());
 #endif
   Colours::use = isatty(1);
-  Context::count = 0;
+  GlobalContext::count = 0;
   CandidateFactory init;
 
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
@@ -437,9 +437,6 @@ int main() {
 #else
       size_t nThreads = std::thread::hardware_concurrency();
 #endif
-
-      /* This is to ensure that std::sort won't be called from the threads */
-      pop.ensureSorted();
 
       /* Split the work between a max number of threads */
       for(size_t k = 0; k < nThreads; k++) {
@@ -493,7 +490,7 @@ int main() {
   post = std::chrono::steady_clock::now();
   std::chrono::duration<double> dur = post - pre;
   std::cout << std::endl << "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
-    Context::count << " candidates tested, best of run:" << std::endl;
+    GlobalContext::count << " candidates tested, best of run:" << std::endl;
 
   /* List the best-of-run candidate */
   pop.best().dump(std::cout);

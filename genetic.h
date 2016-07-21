@@ -2,6 +2,7 @@
 #include <random>
 #include <algorithm>
 #include <type_traits>
+#include <mutex>
 
 
 /* The Candidate template. Needs a typename Fitness which can be a simple type
@@ -43,6 +44,7 @@ class ICandidate {
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
+  std::mutex mtx;
 
   public:
   /* Creates an empty population. */
@@ -59,14 +61,36 @@ class Population : private std::vector<Candidate> {
     add(count, src);
   }
 
+  /* The Big Four: trivial but we need them because the mutex can't be 
+   * default copied or moved */
+  Population(const Population& _p): std::vector<Candidate>(_p), sorted(_p.sorted) { }
+
+  Population(Population&& _p): std::vector<Candidate>(std::move(_p)), sorted(_p.sorted) { }
+
+  Population& operator=(const Population& _p) {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::vector<Candidate>::operator=(_p);
+    sorted = _p.sorted;
+    return *this;
+  }
+
+  Population& operator=(Population&& _p) {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::vector<Candidate>::operator=(std::move(_p));
+    sorted = _p.sorted;
+    return *this;
+  }
+
   /* Pushes back a new candidate. */
   void add(const Candidate& c) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->push_back(c);
     sorted = false;
   }
 
   /* Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->push_back(std::forward<Candidate>(c));
     sorted = false;
   }
@@ -79,6 +103,7 @@ class Population : private std::vector<Candidate> {
    * The template allows for optimizations (inlining) in the latter case. */
   template<class F>
   void add(size_t count, F src) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
       this->push_back(src());
@@ -87,6 +112,7 @@ class Population : private std::vector<Candidate> {
 
   /* Draws n candidates from a source function (returning reference). */
   void add(size_t count, std::function<const Candidate&()> src) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
       this->push_back(src());
@@ -95,6 +121,7 @@ class Population : private std::vector<Candidate> {
 
   /* Takes all candidates from another population. */
   void add(Population<Candidate>& pop) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
     this->insert(end(), pop.begin(), pop.end());
     sorted = false;
@@ -102,6 +129,7 @@ class Population : private std::vector<Candidate> {
 
   /* Like add(Population&) but moving the contents of the argument. */
   void merge(Population<Candidate>& pop) {
+    std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
     this->insert(end(), std::make_move_iterator(pop.begin()), std::make_move_iterator(pop.end()));
     pop.clear();
@@ -141,8 +169,8 @@ class Population : private std::vector<Candidate> {
   /* Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
   void trim(size_t newSize) {
-    std::sort(begin(), end());
-    sorted = true;
+    ensureSorted();
+    std::lock_guard<std::mutex> lock(mtx);
     if(size() > newSize)
       this->resize(newSize);
   }
@@ -169,12 +197,9 @@ class Population : private std::vector<Candidate> {
     return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
   }
 
-  inline void precomputeFitnesses() {
-    for(Candidate &c : *this)
-      c.fitness();
-  }
-
+  private:
   inline void ensureSorted() {
+    std::lock_guard<std::mutex> lock(mtx);
     if(!sorted) {
       std::sort(begin(), end());
       sorted = true;
