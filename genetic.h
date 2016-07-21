@@ -119,9 +119,9 @@ class Population : private std::vector<Candidate> {
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected. */
-  template<class T>
-  const Candidate& rankSelect(T& rng, float bias) {
-    static std::uniform_real_distribution<float> rDist(0, 1);
+  template<class Rng>
+  const Candidate& rankSelect(Rng& rng, float bias) {
+    static thread_local std::uniform_real_distribution<float> rDist(0, 1);
     ensureSorted();
     float x = rDist(rng);
     if(x == 1)
