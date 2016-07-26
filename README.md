@@ -65,8 +65,9 @@ qubits, assuming that the output register was initialized to zero.
 
 This is solved using a generational (l+m) scheme with rank-based selection and 
 rank-based elitist trimming. The encoding is indirect, preventing invalid 
-quantum gates. The genetic operations are plentiful, with an 
-empirical probability distribution:
+quantum gates. The genetic operations are plentiful, initially chosen from 
+a uniform distribution but gradually biased more towards those having produced 
+higher quality solutions:
 
 * single-gene random-allele mutation (target qubit or control set)
 * slice addition
@@ -120,5 +121,6 @@ evolutionary algorithm.
 
 A harder test function was chosen to be `x mod 5` with one 5-bit 
 input register and a 3-bit output. After 500 generations of a (10000+30000) 
-scheme candidate solutions with as little as 7 bit errors out of 96 (`2^5 * 3`) 
-have been found (4 bit errors in one run). These are too long to list.
+scheme candidate solutions with as low as 7 bit errors out of 96 (`2^5 * 3`) 
+have frequently been found (4 bit errors in certain runs). These are too long 
+to list.

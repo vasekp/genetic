@@ -20,7 +20,7 @@ namespace ThreadContext {
 
 
 namespace Config {
-  const float selectBias = 1.6;
+  const float selectBias = 1.0;
   const float trimBias = 2.5;
   const int popSize = 10000;
   const int popSize2 = 30000;
@@ -35,6 +35,8 @@ namespace Config {
   const float pIn = 10;             // penalty for leaving input register modified (= error)
   const float pLength = 1/10000.0;  // penalty for number of gates
   const float pControl = 1/3000.0;  // penalty for control (quadratic in number of C-ing bits)
+
+  const float heurFactor = 0.15;    // how much prior success of genetic ops should influence future choices
 
   const int bIn = 5;
   const int cIn = 1;
@@ -109,8 +111,10 @@ class Gene {
 
 class Candidate: public ICandidate<float> {
   std::vector<Gene> gt;
+  int origin = -1;
 
   public:
+
   Candidate() = default;
 
   /* Suboptimal. This will make the compiler scream at me if I forget. */
@@ -122,6 +126,15 @@ class Candidate: public ICandidate<float> {
     for(auto it = c.gt.begin(); it != c.gt.end(); it++)
       os << (it == c.gt.begin() ? "" : " ") << *it;
     return os;
+  }
+
+  Candidate& setOrigin(int _origin) {
+    origin = _origin;
+    return *this;
+  }
+
+  int getOrigin() const {
+    return origin;
   }
 
   void dump(std::ostream&) const;
@@ -169,30 +182,10 @@ class CandidateFactory {
   std::uniform_int_distribution<> dTgt;
   std::uniform_int_distribution<> dCtrl;
 
-  GenOp func[10] = {
-      &CandidateFactory::mAlterTarget,
-      &CandidateFactory::mAlterControl,
-      &CandidateFactory::mAddSlice,
-      &CandidateFactory::mAddPair,
-      &CandidateFactory::mDeleteSlice,
-      &CandidateFactory::mSplitSwap2,
-      &CandidateFactory::mSplitSwap4,
-      &CandidateFactory::mReverseSlice,
-      &CandidateFactory::crossover1,
-      &CandidateFactory::crossover2,
-    };
-  std::discrete_distribution<> dFun{
-      2.5,  // mAlterTarget
-      1.5,  // mAlterControl
-      2.0,  // mAddSlice
-      3.0,  // mAddPair
-      2.0,  // mDeleteSlice
-      3.0,  // mSplitSwap2
-      3.5,  // mSplitSwap4
-      3.0,  // mReverseSlice
-      4.0,  // crossover1
-      4.0   // crossover2
-  };
+  static const std::vector<std::pair<GenOp, std::string>> func;
+
+  static std::vector<int> weights;
+  std::discrete_distribution<> dFun;
 
   public:
   CandidateFactory(Source&& _src = nullptr):
@@ -200,10 +193,16 @@ class CandidateFactory {
     dUni(0, 1),
     dTgt(0, Config::nBit - 1),
     dCtrl(0, (1 << (Config::nBit-1)) - 1)
-  { }
+  {
+    if(weights.size() == 0) {
+      weights = std::vector<int>(func.size(), 1);
+      normalizeWeights();
+    }
+    applyWeights();
+  }
 
   Candidate genInit() {
-    static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
+    const static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
     std::vector<Gene> gt;
     gt.reserve(Config::expLengthIni);
     do {
@@ -214,7 +213,30 @@ class CandidateFactory {
 
   Candidate getNew() {
     int index = dFun(ThreadContext::rng);
-    return (this->*func[index])();
+    return (this->*func[index].first)().setOrigin(index);
+  }
+
+  static void hit(int ix) {
+    if(ix >= 0)
+      weights[ix]++;
+  }
+
+  static void normalizeWeights() {
+    int total = std::accumulate(weights.begin(), weights.end(), 0);
+    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total;
+    for(int &w : weights)
+      w *= factor;
+  }
+
+  void applyWeights() {
+    dFun = std::discrete_distribution<>(weights.begin(), weights.end());
+  }
+
+  static void dumpWeights(std::ostream &os) {
+    float total = std::accumulate(weights.begin(), weights.end(), 0);
+    int sz = func.size();
+    for(int i = 0; i < sz; i++)
+      os << func[i].second << ":\t" << weights[i] / total << std::endl;
   }
 
   private:
@@ -370,6 +392,21 @@ class CandidateFactory {
   }
 };
 
+std::vector<int> CandidateFactory::weights;
+
+const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFactory::func {
+    { &CandidateFactory::mAlterTarget,  "MTarget" },
+    { &CandidateFactory::mAlterControl, "MControl" },
+    { &CandidateFactory::mAddSlice,     "AddSlice" },
+    { &CandidateFactory::mAddPair,      "AddPair" },
+    { &CandidateFactory::mDeleteSlice,  "DelSlice" },
+    { &CandidateFactory::mSplitSwap2,   "SpltSwp2"  },
+    { &CandidateFactory::mSplitSwap4,   "SpltSwp4"  },
+    { &CandidateFactory::mReverseSlice, "InvSlice" },
+    { &CandidateFactory::crossover1,    "C/Over1" },
+    { &CandidateFactory::crossover2,    "C/Over2" }
+  };
+
 
 void Candidate::dump(std::ostream& os) const {
   register unsigned work;
@@ -470,7 +507,9 @@ int main() {
     /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize-1, 
         [&]() -> const Candidate& {
-          return pop2.rankSelect(ThreadContext::rng, Config::trimBias);
+          const Candidate& c = pop2.rankSelect(ThreadContext::rng, Config::trimBias);
+          CandidateFactory::hit(c.getOrigin());
+          return c;
         });
 
     /* Unconditionally add the best candidate */
@@ -483,6 +522,9 @@ int main() {
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
       ": " << best << std::endl;
+
+    /* Make older generations matter less in the choice of gen. op. */
+    CandidateFactory::normalizeWeights();
   }
 
   post = std::chrono::steady_clock::now();
@@ -492,4 +534,8 @@ int main() {
 
   /* List the best-of-run candidate */
   pop.best().dump(std::cout);
+
+  /* Dump the heuristic distribution */
+  std::cout << std::endl << "Genetic operator distribution:" << std::endl;
+  CandidateFactory::dumpWeights(std::cout);
 }
