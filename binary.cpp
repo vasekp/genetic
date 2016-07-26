@@ -431,15 +431,10 @@ int main() {
 
     {
       std::mutex popMutex;
+#ifndef BENCH
       std::vector<std::thread> tasks;
-#ifdef BENCH
-      size_t nThreads = 1;
-#else
-      size_t nThreads = std::thread::hardware_concurrency();
-#endif
-
       /* Split the work between a max number of threads */
-      for(size_t k = 0; k < nThreads; k++) {
+      for(size_t k = 0; k < std::thread::hardware_concurrency(); k++) {
 
         auto seed = ThreadContext::rng();
         /* Let each thread keep adding candidates until the goal is met */
@@ -448,6 +443,7 @@ int main() {
               /* Prepare a separate CandidateFactory for each thread so that random
                * number generator calls won't clash */
               ThreadContext::rng = ThreadContext::rng_t(seed);
+#endif
               CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(ThreadContext::rng, Config::selectBias); });
               while(true) {
                 Candidate c = cf.getNew();
@@ -460,10 +456,12 @@ int main() {
                     break;
                 }
               }
+#ifndef BENCH
             }));
       }
       for(auto &task : tasks)
         task.join();
+#endif
     }
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
