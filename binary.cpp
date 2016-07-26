@@ -38,8 +38,8 @@ namespace Config {
 
   const float heurFactor = 0.15;    // how much prior success of genetic ops should influence future choices
 
-  const int bIn = 5;
-  const int cIn = 1;
+  const int bIn = 3;
+  const int cIn = 2;
   const int nIn = bIn * cIn;
   const int nOut = 3;
   const int nAnc = 0;
@@ -51,7 +51,8 @@ namespace Config {
       ins[j] = in & ((1 << Config::bIn) - 1);
       in >>= bIn;
     }
-    return (ins[0] % 5) & ((1 << Config::nOut) - 1);
+    //return (ins[0] % 5) & ((1 << Config::nOut) - 1);
+    return (ins[0] + ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
 
