@@ -19,8 +19,8 @@ namespace ThreadContext {
 namespace Config {
   const float selectBias = 1.0;
   const float trimBias = 2.5;
-  const int popSize = 10000;
-  const int popSize2 = 30000;
+  const size_t popSize = 10000;
+  const size_t popSize2 = 30000;
 #ifdef BENCH
   const int nGen = 100;
 #else
@@ -66,23 +66,23 @@ namespace Colours {
 
 
 class Gene {
-  int tgt;
+  unsigned tgt;
   unsigned ctrlEnc;
   unsigned ctrl;
 
   public:
-  Gene(int _target, unsigned _control): tgt(_target), ctrlEnc(_control) {
+  Gene(unsigned _target, unsigned _control): tgt(_target), ctrlEnc(_control) {
     ctrl =
       ((ctrlEnc >> tgt) << (tgt+1)) // shift bits left of tgt to the left
         |
       (ctrlEnc & ((1 << tgt) - 1));    // keep bits right of tgt
   }
 
-  int target() const {
+  unsigned target() const {
     return tgt;
   }
 
-  int control() const {
+  unsigned control() const {
     return ctrlEnc;
   }
 
@@ -148,7 +148,7 @@ class Candidate: public ICandidate<float> {
   float computeFitness() const {
     register unsigned work;
     unsigned cmp;
-    int mism = 0;
+    unsigned mism = 0;
     for(int in = 0; in < (1 << Config::nIn); in++) {
       work = in;
       for(const Gene& g : gt)
@@ -181,18 +181,18 @@ class CandidateFactory {
 
   Source src;
   std::uniform_real_distribution<> dUni{0, 1};
-  std::uniform_int_distribution<> dTgt{0, Config::nBit - 1};
-  std::uniform_int_distribution<> dCtrl{0, (1<<(Config::nBit-1)) - 1};
+  std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
+  std::uniform_int_distribution<unsigned> dCtrl{0, (1<<(Config::nBit-1)) - 1};
 
   static const std::vector<std::pair<GenOp, std::string>> func;
 
-  static std::vector<int> weights;
+  static std::vector<unsigned> weights;
   std::discrete_distribution<> dFun;
 
   public:
   CandidateFactory(Source&& _src = nullptr): src(std::move(_src)) {
     if(weights.size() == 0) {
-      weights = std::vector<int>(func.size(), 1);
+      weights = std::vector<unsigned>(func.size(), 1);
       normalizeWeights();
     }
     applyWeights();
@@ -219,9 +219,9 @@ class CandidateFactory {
   }
 
   static void normalizeWeights() {
-    int total = std::accumulate(weights.begin(), weights.end(), 0);
+    unsigned total = std::accumulate(weights.begin(), weights.end(), 0);
     float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total;
-    for(int& w : weights)
+    for(auto& w : weights)
       w *= factor;
   }
 
@@ -242,7 +242,7 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    int pos = ThreadContext::rng() % p.gt.size();
+    unsigned pos = ThreadContext::rng() % p.gt.size();
     gm[pos] = Gene(dTgt(ThreadContext::rng), gm[pos].control());
     return Candidate(std::move(gm));
   }
@@ -252,14 +252,14 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    int pos = ThreadContext::rng() % p.gt.size();
+    unsigned pos = ThreadContext::rng() % p.gt.size();
     gm[pos] = Gene(gm[pos].target(), dCtrl(ThreadContext::rng));
     return Candidate(std::move(gm));
   }
 
   Candidate mAddSlice() {
     auto &p = src();
-    int pos = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos = ThreadContext::rng() % (p.gt.size() + 1);
     std::vector<Gene> ins;
     ins.reserve(Config::expLengthAdd);
     double probTerm = 1/Config::expLengthAdd;
@@ -276,8 +276,8 @@ class CandidateFactory {
 
   Candidate mAddPair() {
     auto &p = src();
-    int pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-        pos2 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
+             pos2 = ThreadContext::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> gm;
@@ -296,8 +296,8 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    int pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-        pos2 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
+             pos2 = ThreadContext::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> gm;
@@ -311,7 +311,7 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    int pos = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos = ThreadContext::rng() % (p.gt.size() + 1);
     std::vector<Gene> gm;
     gm.reserve(p.gt.size());
     gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
@@ -323,9 +323,9 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    int pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-        pos2 = ThreadContext::rng() % (p.gt.size() + 1),
-        pos3 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
+             pos2 = ThreadContext::rng() % (p.gt.size() + 1),
+             pos3 = ThreadContext::rng() % (p.gt.size() + 1);
     if(pos2 < pos1) std::swap(pos1, pos2);
     if(pos3 < pos1) std::swap(pos1, pos3);
     if(pos3 < pos2) std::swap(pos2, pos3);
@@ -340,11 +340,11 @@ class CandidateFactory {
 
   Candidate mReverseSlice() {
     auto &p = src();
-    int sz = p.gt.size();
+    auto sz = p.gt.size();
     if(sz == 0)
       return p;
-    int pos1 = ThreadContext::rng() % (sz + 1),
-        pos2 = ThreadContext::rng() % (sz + 1);
+    unsigned pos1 = ThreadContext::rng() % (sz + 1),
+             pos2 = ThreadContext::rng() % (sz + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> gm;
@@ -360,8 +360,8 @@ class CandidateFactory {
          &p2 = src();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
-    int pos1 = ThreadContext::rng() % (gt1.size() + 1),
-        pos2 = ThreadContext::rng() % (gt2.size() + 1);
+    unsigned pos1 = ThreadContext::rng() % (gt1.size() + 1),
+             pos2 = ThreadContext::rng() % (gt2.size() + 1);
     std::vector<Gene> gm;
     gm.reserve(pos1 + (gt2.size() - pos2));
     gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1);
@@ -374,10 +374,10 @@ class CandidateFactory {
          &p2 = src();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
-    int pos1l = ThreadContext::rng() % (gt1.size() + 1),
-        pos1r = ThreadContext::rng() % (gt1.size() + 1);
-    int pos2l = ThreadContext::rng() % (gt2.size() + 1),
-        pos2r = ThreadContext::rng() % (gt2.size() + 1);
+    unsigned pos1l = ThreadContext::rng() % (gt1.size() + 1),
+             pos1r = ThreadContext::rng() % (gt1.size() + 1),
+             pos2l = ThreadContext::rng() % (gt2.size() + 1),
+             pos2r = ThreadContext::rng() % (gt2.size() + 1);
     if(pos1r < pos1l) std::swap(pos1l, pos1r);
     if(pos2r < pos2l) std::swap(pos2l, pos2r);
     std::vector<Gene> gm;
@@ -430,7 +430,7 @@ void Candidate::dump(std::ostream& os) const {
 
 std::atomic_ulong Candidate::count { 0 };
 
-std::vector<int> CandidateFactory::weights;
+std::vector<unsigned> CandidateFactory::weights;
 
 const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFactory::func {
     { &CandidateFactory::mAlterTarget,  "MTarget" },
