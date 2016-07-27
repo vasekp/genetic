@@ -66,16 +66,29 @@ namespace Colours {
 
 
 class Gene {
-  unsigned tgt;
-  unsigned ctrlEnc;
-  unsigned ctrl;
+  unsigned tgt;     // target qubit
+  unsigned ctrl;    // bitmask of control bits: 0 through 2^nBit - 1 with zero at tgt bit
+  unsigned ctrlEnc; // 0 through 3^(nBit-1) - 1
+  uint32_t hw;      // Hamming weight of ctrl
 
   public:
-  Gene(unsigned _target, unsigned _control): tgt(_target), ctrlEnc(_control) {
+  Gene(unsigned _target, unsigned _control): tgt(_target), ctrl(0), ctrlEnc(_control), hw(0) {
+    /* Convert from base 3 to base 2: 0,1 become 0; 2 becomes 1. This way 1 is
+     * twice less likely than 0 at any position if the original distribution
+     * was uniform. Thus plain NOTs and C-NOTs will be generated more often
+     * than CC-NOTs and higher.
+     * The conversion also reverses the order of digits which is unimportant. */
+    for(int i = 0; i < Config::nBit-1; i++) {
+      ctrl <<= 1;
+      if(_control % 3 == 2) ctrl |= 1, hw++;
+      _control /= 3;
+    }
+    /* At this point ctrl has nBit-1 bits. We use this to guarantee that
+     * 1<<tgt is left unoccupied. */
     ctrl =
-      ((ctrlEnc >> tgt) << (tgt+1)) // shift bits left of tgt to the left
+      ((ctrl >> tgt) << (tgt+1))  // shift bits left of tgt to the left
         |
-      (ctrlEnc & ((1 << tgt) - 1));    // keep bits right of tgt
+      (ctrl & ((1 << tgt) - 1));  // keep bits right of tgt
   }
 
   unsigned target() const {
@@ -84,6 +97,10 @@ class Gene {
 
   unsigned control() const {
     return ctrlEnc;
+  }
+
+  unsigned weight() const {
+    return hw;
   }
 
   unsigned apply(unsigned src) const {
@@ -116,7 +133,7 @@ class Candidate: public ICandidate<float> {
 
   Candidate() = default;
 
-  /* Suboptimal. This will make the compiler scream at me if I forget. */
+  /* Note to self: copying is suboptimal. This will make the compiler scream at me if I forget. */
   Candidate(std::vector<Gene>& _gt) = delete;
 
   Candidate(std::vector<Gene>&& _gt): gt(std::move(_gt)) { }
@@ -159,7 +176,7 @@ class Candidate: public ICandidate<float> {
     }
     float penalty = gt.size()*Config::pLength;
     for(const Gene& g : gt) {
-      unsigned h = hamming(g.control());
+      unsigned h = g.weight();
       penalty += h*h*Config::pControl;
     }
     count++;
@@ -175,6 +192,18 @@ class Candidate: public ICandidate<float> {
 };
 
 
+/* Static calculation of integral pow(3, n) */
+template<int N>
+struct pow3 {
+    static const unsigned value = 3*pow3<N-1>::value;
+};
+
+template<>
+struct pow3<0> {
+    static const unsigned value = 1;
+};
+
+
 class CandidateFactory {
   typedef Candidate (CandidateFactory::*GenOp)();
   typedef std::function<const Candidate&()> Source;
@@ -182,7 +211,7 @@ class CandidateFactory {
   Source src;
   std::uniform_real_distribution<> dUni{0, 1};
   std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
-  std::uniform_int_distribution<unsigned> dCtrl{0, (1<<(Config::nBit-1)) - 1};
+  std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
 
   static const std::vector<std::pair<GenOp, std::string>> func;
 
