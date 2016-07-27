@@ -6,6 +6,7 @@
 #include <mutex>
 #include <chrono>
 #include <atomic>
+#include <iomanip>
 
 #include "genetic.h"
 
@@ -261,8 +262,18 @@ class CandidateFactory {
   static void dumpWeights(std::ostream& os) {
     float total = std::accumulate(weights.begin(), weights.end(), 0);
     int sz = func.size();
+    /* Find the longest GenOp name */
+    auto max = std::max_element(func.begin(), func.end(),
+        [](const decltype(func)::value_type& v1, const decltype(func)::value_type& v2) {
+          return v1.second.length() < v2.second.length();
+        });
+    auto maxw = max->second.length();
+    auto _flags = os.flags(std::ios_base::left | std::ios_base::fixed);
+    auto _precision = os.precision(4);
     for(int i = 0; i < sz; i++)
-      os << func[i].second << ":\t" << weights[i] / total << std::endl;
+      os << std::setw(maxw+3) << func[i].second + ':' << weights[i] / total << std::endl;
+    os.flags(_flags);
+    os.precision(_precision);
   }
 
   private:
