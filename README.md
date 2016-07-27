@@ -119,13 +119,13 @@ Interestingly, this circuit “stores” some information in the second input bi
 and uncomputes this step later on. This, again, was a result purely of the 
 evolutionary algorithm.
 
-An analogous problem with addition proved much harder to solve using the 
+An analogous problem with addition proved somewhat harder to solve using the 
 current methods and prone to early convergence. The reasons are under current 
 investigation. However after the implementation of metaheuristics the 
 algorithm has been able to find zero-error solutions, too, like the following 
-in 137-th generation:
+in 53-th generation:
 
-`7[4] 9[6] 9[3] 8[5] 8[17] 9[28] 8[2] 9[157] 7[1]`
+`9[6] 7[1] 8[2] 9[3] 8[5] 9[25] 9[148] 8[14] 7[4]`
 
 or another without need for `C^3-NOT` first observed in another run in 373-th 
 generation:
@@ -134,6 +134,6 @@ generation:
 
 A deliberately harder test function was chosen to be `x mod 5` with one 5-bit 
 input register and a 3-bit output. After 500 generations of a (10000+30000) 
-scheme candidate solutions with as low as 7 bit errors out of 96 (`2^5 * 3`) 
-have frequently been found (4 bit errors in certain runs). These are too long 
-to list.
+scheme candidate solutions with as low as 2 to 5 bit errors out of 96 (`2^5 *
+3`) have frequently been found (along with one zero-error solution in one run
+so far). These are too long to list.

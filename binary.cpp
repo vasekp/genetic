@@ -29,7 +29,7 @@ namespace Config {
 #endif
 
   const float expLengthIni = 30;    // expected length of circuits in 0th generation
-  const float expLengthAdd = 3;     // expected length of gates inserted in mutation
+  const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pIn = 10;             // penalty for leaving input register modified (= error)
   const float pLength = 1/10000.0;  // penalty for number of gates
   const float pControl = 1/3000.0;  // penalty for control (quadratic in number of C-ing bits)
@@ -314,20 +314,24 @@ class CandidateFactory {
     return Candidate(std::move(gm));
   }
 
-  Candidate mAddPair() {
+  Candidate mAddPairs() {
     auto &p = src();
     unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
              pos2 = ThreadContext::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
+    std::vector<Gene> ins;
+    ins.reserve(2*Config::expLengthAdd);
+    double probTerm = 1/Config::expLengthAdd;
+    do {
+      ins.emplace_back(dTgt(ThreadContext::rng), dCtrl(ThreadContext::rng));
+    } while(dUni(ThreadContext::rng) > probTerm);
     std::vector<Gene> gm;
-    unsigned tgt = dTgt(ThreadContext::rng),
-             ctrl = dCtrl(ThreadContext::rng);
-    gm.reserve(p.gt.size() + 2);
+    gm.reserve(p.gt.size() + 2*ins.size());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
-    gm.emplace_back(tgt, ctrl);
+    gm.insert(gm.end(), ins.begin(), ins.end());
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
-    gm.emplace_back(tgt, ctrl);
+    gm.insert(gm.end(), std::make_move_iterator(ins.rbegin()), std::make_move_iterator(ins.rend()));
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
     return Candidate(std::move(gm));
   }
@@ -476,7 +480,7 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
     { &CandidateFactory::mAlterTarget,  "MTarget" },
     { &CandidateFactory::mAlterControl, "MControl" },
     { &CandidateFactory::mAddSlice,     "AddSlice" },
-    { &CandidateFactory::mAddPair,      "AddPair" },
+    { &CandidateFactory::mAddPairs,     "AddPairs" },
     { &CandidateFactory::mDeleteSlice,  "DelSlice" },
     { &CandidateFactory::mSplitSwap2,   "SpltSwp2"  },
     { &CandidateFactory::mSplitSwap4,   "SpltSwp4"  },
