@@ -117,9 +117,9 @@ class Candidate: public ICandidate<float> {
   Candidate() = default;
 
   /* Suboptimal. This will make the compiler scream at me if I forget. */
-  Candidate(std::vector<Gene> &_gt) = delete;
+  Candidate(std::vector<Gene>& _gt) = delete;
 
-  Candidate(std::vector<Gene> &&_gt): gt(std::move(_gt)) { }
+  Candidate(std::vector<Gene>&& _gt): gt(std::move(_gt)) { }
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
     for(auto it = c.gt.begin(); it != c.gt.end(); it++)
@@ -151,14 +151,14 @@ class Candidate: public ICandidate<float> {
     int mism = 0;
     for(int in = 0; in < (1 << Config::nIn); in++) {
       work = in;
-      for(const Gene &g : gt)
+      for(const Gene& g : gt)
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
       mism += hamming(work ^ cmp, Config::nBit);
       mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in, Config::nBit);
     }
     float penalty = gt.size()*Config::pLength;
-    for(const Gene &g : gt) {
+    for(const Gene& g : gt) {
       unsigned h = hamming(g.control(), Config::nBit);
       penalty += h*h*Config::pControl;
     }
@@ -227,7 +227,7 @@ class CandidateFactory {
   static void normalizeWeights() {
     int total = std::accumulate(weights.begin(), weights.end(), 0);
     float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total;
-    for(int &w : weights)
+    for(int& w : weights)
       w *= factor;
   }
 
@@ -235,7 +235,7 @@ class CandidateFactory {
     dFun = std::discrete_distribution<>(weights.begin(), weights.end());
   }
 
-  static void dumpWeights(std::ostream &os) {
+  static void dumpWeights(std::ostream& os) {
     float total = std::accumulate(weights.begin(), weights.end(), 0);
     int sz = func.size();
     for(int i = 0; i < sz; i++)
@@ -400,7 +400,7 @@ void Candidate::dump(std::ostream& os) const {
   register unsigned work;
   for(int in = 0; in < (1 << Config::nIn); in++) {
     work = in;
-    for(const Gene &g : gt)
+    for(const Gene& g : gt)
       work = g.apply(work);
     for(int i = 0; i < Config::cIn; i++) {
       for(int j = 0; j < Config::bIn; j++)
@@ -501,7 +501,7 @@ int main() {
 #ifndef BENCH
             }));
       }
-      for(auto &task : tasks)
+      for(auto& task : tasks)
         task.join();
 #endif
     }
@@ -512,7 +512,7 @@ int main() {
     /* Rank-trim down to popSize */
     pop = Population<Candidate>(Config::popSize-1, 
         [&]() -> const Candidate& {
-          const Candidate& c = pop2.rankSelect(ThreadContext::rng, Config::trimBias);
+          const Candidate &c = pop2.rankSelect(ThreadContext::rng, Config::trimBias);
           CandidateFactory::hit(c.getOrigin());
           return c;
         });
