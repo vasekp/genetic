@@ -9,9 +9,6 @@
 
 #include "genetic.h"
 
-namespace GlobalContext {
-  std::atomic_uint count;
-}
 
 namespace ThreadContext {
   typedef std::ranlux48_base rng_t;
@@ -38,8 +35,8 @@ namespace Config {
 
   const float heurFactor = 0.15;    // how much prior success of genetic ops should influence future choices
 
-  const int bIn = 3;
-  const int cIn = 2;
+  const int bIn = 5;
+  const int cIn = 1;
   const int nIn = bIn * cIn;
   const int nOut = 3;
   const int nAnc = 0;
@@ -51,8 +48,8 @@ namespace Config {
       ins[j] = in & ((1 << Config::bIn) - 1);
       in >>= bIn;
     }
-    //return (ins[0] % 5) & ((1 << Config::nOut) - 1);
-    return (ins[0] + ins[1]) & ((1 << Config::nOut) - 1);
+    return (ins[0] % 5) & ((1 << Config::nOut) - 1);
+    //return (ins[0] + ins[1]) & ((1 << Config::nOut) - 1);
   }
 }
 
@@ -113,6 +110,7 @@ class Gene {
 class Candidate: public ICandidate<float> {
   std::vector<Gene> gt;
   int origin = -1;
+  static std::atomic_ulong count;
 
   public:
 
@@ -140,6 +138,10 @@ class Candidate: public ICandidate<float> {
 
   void dump(std::ostream&) const;
 
+  static unsigned long totalCount() {
+    return count;
+  }
+
   friend class CandidateFactory;
 
   private:
@@ -160,7 +162,7 @@ class Candidate: public ICandidate<float> {
       unsigned h = hamming(g.control(), Config::nBit);
       penalty += h*h*Config::pControl;
     }
-    GlobalContext::count++;
+    count++;
     return mism + penalty;
   }
 
@@ -393,21 +395,6 @@ class CandidateFactory {
   }
 };
 
-std::vector<int> CandidateFactory::weights;
-
-const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFactory::func {
-    { &CandidateFactory::mAlterTarget,  "MTarget" },
-    { &CandidateFactory::mAlterControl, "MControl" },
-    { &CandidateFactory::mAddSlice,     "AddSlice" },
-    { &CandidateFactory::mAddPair,      "AddPair" },
-    { &CandidateFactory::mDeleteSlice,  "DelSlice" },
-    { &CandidateFactory::mSplitSwap2,   "SpltSwp2"  },
-    { &CandidateFactory::mSplitSwap4,   "SpltSwp4"  },
-    { &CandidateFactory::mReverseSlice, "InvSlice" },
-    { &CandidateFactory::crossover1,    "C/Over1" },
-    { &CandidateFactory::crossover2,    "C/Over2" }
-  };
-
 
 void Candidate::dump(std::ostream& os) const {
   register unsigned work;
@@ -447,6 +434,24 @@ void Candidate::dump(std::ostream& os) const {
 }
 
 
+std::atomic_ulong Candidate::count { 0 };
+
+std::vector<int> CandidateFactory::weights;
+
+const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFactory::func {
+    { &CandidateFactory::mAlterTarget,  "MTarget" },
+    { &CandidateFactory::mAlterControl, "MControl" },
+    { &CandidateFactory::mAddSlice,     "AddSlice" },
+    { &CandidateFactory::mAddPair,      "AddPair" },
+    { &CandidateFactory::mDeleteSlice,  "DelSlice" },
+    { &CandidateFactory::mSplitSwap2,   "SpltSwp2"  },
+    { &CandidateFactory::mSplitSwap4,   "SpltSwp4"  },
+    { &CandidateFactory::mReverseSlice, "InvSlice" },
+    { &CandidateFactory::crossover1,    "C/Over1" },
+    { &CandidateFactory::crossover2,    "C/Over2" }
+  };
+
+
 int main() {
 #ifdef BENCH
   ThreadContext::rng = ThreadContext::rng_t(1);
@@ -454,7 +459,6 @@ int main() {
   ThreadContext::rng = ThreadContext::rng_t((std::random_device())());
 #endif
   Colours::use = isatty(1);
-  GlobalContext::count = 0;
   CandidateFactory init;
 
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
@@ -531,7 +535,7 @@ int main() {
   post = std::chrono::steady_clock::now();
   std::chrono::duration<double> dur = post - pre;
   std::cout << std::endl << "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
-    GlobalContext::count << " candidates tested, best of run:" << std::endl;
+    Candidate::totalCount() << " candidates tested, best of run:" << std::endl;
 
   /* List the best-of-run candidate */
   pop.best().dump(std::cout);
