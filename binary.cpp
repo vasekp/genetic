@@ -154,24 +154,23 @@ class Candidate: public ICandidate<float> {
       for(const Gene& g : gt)
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
-      mism += hamming(work ^ cmp, Config::nBit);
-      mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in, Config::nBit);
+      mism += hamming(work ^ cmp);
+      mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
     }
     float penalty = gt.size()*Config::pLength;
     for(const Gene& g : gt) {
-      unsigned h = hamming(g.control(), Config::nBit);
+      unsigned h = hamming(g.control());
       penalty += h*h*Config::pControl;
     }
     count++;
     return mism + penalty;
   }
 
-  inline static int hamming(register unsigned x, register int mx) {
-    register int h = 0;
-    for(register int i = 0, m = 1; i < mx; i++, m <<= 1)
-      if(x & m)
-        h++;
-    return h;
+  inline static uint32_t hamming(register uint32_t x) {
+    /* http://stackoverflow.com/a/14555819/1537925 */
+    x -= ((x >> 1) & 0x55555555);
+    x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+    return (((x + (x >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
   }
 };
 
