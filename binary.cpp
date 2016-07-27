@@ -180,9 +180,9 @@ class CandidateFactory {
   typedef std::function<const Candidate&()> Source;
 
   Source src;
-  std::uniform_real_distribution<> dUni;
-  std::uniform_int_distribution<> dTgt;
-  std::uniform_int_distribution<> dCtrl;
+  std::uniform_real_distribution<> dUni{0, 1};
+  std::uniform_int_distribution<> dTgt{0, Config::nBit - 1};
+  std::uniform_int_distribution<> dCtrl{0, (1<<(Config::nBit-1)) - 1};
 
   static const std::vector<std::pair<GenOp, std::string>> func;
 
@@ -190,12 +190,7 @@ class CandidateFactory {
   std::discrete_distribution<> dFun;
 
   public:
-  CandidateFactory(Source&& _src = nullptr):
-    src(std::move(_src)),
-    dUni(0, 1),
-    dTgt(0, Config::nBit - 1),
-    dCtrl(0, (1 << (Config::nBit-1)) - 1)
-  {
+  CandidateFactory(Source&& _src = nullptr): src(std::move(_src)) {
     if(weights.size() == 0) {
       weights = std::vector<int>(func.size(), 1);
       normalizeWeights();
