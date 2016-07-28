@@ -28,13 +28,15 @@ namespace Config {
   const int nGen = 500;
 #endif
 
-  const float expLengthIni = 30;    // expected length of circuits in 0th generation
+  const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
-  const float pIn = 10;             // penalty for leaving input register modified (= error)
-  const float pLength = 1/10000.0;  // penalty for number of gates
-  const float pControl = 1/3000.0;  // penalty for control (quadratic in number of C-ing bits)
+  const float pDeleteUniform = 0.10;  // probability of single gate deletion 
 
-  const float heurFactor = 0.15;    // how much prior success of genetic ops should influence future choices
+  const float pIn = 10;               // penalty for leaving input register modified (= error)
+  const float pLength = 1/10000.0;    // penalty for number of gates
+  const float pControl = 1/3000.0;    // penalty for control (quadratic in number of C-ing bits)
+
+  const float heurFactor = 0.15;      // how much prior success of genetic ops should influence future choices
 
   const int bIn = 5;
   const int cIn = 1;
@@ -293,7 +295,17 @@ class CandidateFactory {
       return p;
     auto gm = p.gt;
     unsigned pos = ThreadContext::rng() % p.gt.size();
-    gm[pos] = Gene(gm[pos].target(), dCtrl(ThreadContext::rng));
+    gm[pos] = Gene(gm[pos].target(), gm[pos].control() ^ dCtrl(ThreadContext::rng));
+    return Candidate(std::move(gm));
+  }
+
+  Candidate mAlterSingle() {
+    auto &p = src();
+    if(p.gt.size() == 0)
+      return p;
+    auto gm = p.gt;
+    unsigned pos = ThreadContext::rng() % p.gt.size();
+    gm[pos] = Gene(dTgt(ThreadContext::rng), gm[pos].control() ^ dCtrl(ThreadContext::rng));
     return Candidate(std::move(gm));
   }
 
@@ -351,6 +363,32 @@ class CandidateFactory {
     return Candidate(std::move(gm));
   }
 
+  Candidate mDeleteSliceShort() {
+    auto &p = src();
+    auto sz = p.gt.size();
+    if(sz == 0)
+      return p;
+    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1);
+    /* Integer with the same distribution in mAddSlice */
+    int len = 1 + floor(log(dUni(ThreadContext::rng)) / log(1 - 1/Config::expLengthAdd));
+    unsigned pos2 = pos1 + len > sz ? sz : pos1 + len;
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size() - (pos2 - pos1));
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
+    gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
+    return Candidate(std::move(gm));
+  }
+
+  Candidate mDeleteUniform() {
+    auto &p = src();
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size());
+    for(auto& g : p.gt)
+      if(dUni(ThreadContext::rng) >= Config::pDeleteUniform)
+        gm.push_back(g);
+    return Candidate(std::move(gm));
+  }
+
   Candidate mSplitSwap2() {
     auto &p = src();
     if(p.gt.size() == 0)
@@ -379,6 +417,24 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
+    return Candidate(std::move(gm));
+  }
+
+  Candidate mSplitSwap5() {
+    auto &p = src();
+    if(p.gt.size() == 0)
+      return p;
+    std::vector<unsigned> pos;
+    for(int i = 0; i < 4; i++)
+      pos.push_back(ThreadContext::rng() % (p.gt.size() + 1));
+    std::sort(pos.begin(), pos.end());
+    std::vector<Gene> gm;
+    gm.reserve(p.gt.size());
+    gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos[0]);
+    gm.insert(gm.end(), p.gt.begin() + pos[2], p.gt.begin() + pos[3]);
+    gm.insert(gm.end(), p.gt.begin() + pos[1], p.gt.begin() + pos[2]);
+    gm.insert(gm.end(), p.gt.begin() + pos[0], p.gt.begin() + pos[1]);
+    gm.insert(gm.end(), p.gt.begin() + pos[3], p.gt.end());
     return Candidate(std::move(gm));
   }
 
@@ -431,6 +487,18 @@ class CandidateFactory {
     gm.insert(gm.end(), gt1.begin() + pos1r, gt1.end());
     return Candidate(std::move(gm));
   }
+
+  Candidate threeWay() {
+    auto &p1 = src(),
+         &p2 = src(),
+         &p3 = src();
+    std::vector<Gene> gm;
+    gm.reserve(p1.gt.size() + p2.gt.size() + p3.gt.size());
+    gm.insert(gm.end(), p1.gt.begin(), p1.gt.end());
+    gm.insert(gm.end(), p2.gt.begin(), p2.gt.end());
+    gm.insert(gm.end(), p3.gt.begin(), p3.gt.end());
+    return Candidate(std::move(gm));
+  }
 };
 
 
@@ -477,16 +545,21 @@ std::atomic_ulong Candidate::count { 0 };
 std::vector<unsigned> CandidateFactory::weights;
 
 const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFactory::func {
-    { &CandidateFactory::mAlterTarget,  "MTarget" },
-    { &CandidateFactory::mAlterControl, "MControl" },
-    { &CandidateFactory::mAddSlice,     "AddSlice" },
-    { &CandidateFactory::mAddPairs,     "AddPairs" },
-    { &CandidateFactory::mDeleteSlice,  "DelSlice" },
-    { &CandidateFactory::mSplitSwap2,   "SpltSwp2"  },
-    { &CandidateFactory::mSplitSwap4,   "SpltSwp4"  },
-    { &CandidateFactory::mReverseSlice, "InvSlice" },
-    { &CandidateFactory::crossover1,    "C/Over1" },
-    { &CandidateFactory::crossover2,    "C/Over2" }
+    { &CandidateFactory::mAlterTarget,       "MTarget" },
+    { &CandidateFactory::mAlterControl,      "MControl" },
+    //{ &CandidateFactory::mAlterSingle,       "MSingle" },
+    { &CandidateFactory::mAddSlice,          "AddSlice" },
+    { &CandidateFactory::mAddPairs,          "AddPairs" },
+    { &CandidateFactory::mDeleteSlice,       "DelSlice" },
+    { &CandidateFactory::mDeleteSliceShort,  "DelShort" },
+    //{ &CandidateFactory::mDeleteUniform,     "DelUnif" },
+    //{ &CandidateFactory::mSplitSwap2,        "SpltSwp2"  },
+    { &CandidateFactory::mSplitSwap4,        "SpltSwp4"  },
+    { &CandidateFactory::mSplitSwap5,        "SpltSwp5"  },
+    //{ &CandidateFactory::mReverseSlice,      "InvSlice" },
+    { &CandidateFactory::crossover1,         "C/Over1" },
+    { &CandidateFactory::crossover2,         "C/Over2" },
+    //{ &CandidateFactory::threeWay,           "3some" }
   };
 
 

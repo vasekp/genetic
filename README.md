@@ -71,13 +71,27 @@ higher quality solutions:
 
 * single-gene random-allele mutation (target qubit or control set)
 * slice addition
-* two-allele addition
+* mirror pair slice addition
 * slice deletion
-* (12) permutation
-* (1)(23)(4) permutation
+* AB → BA permutation
+* ABCD → ACBD permutation
+* ABCDE → ADCBE permutation
 * variable-k-inversion
 * single-point crossover
 * two-point crossover
+* three-way full concatenation
+
+The metaheuristics showed some how each of these operations is influential 
+and, in some cases, how it can be enhanced (e.g., single pair addition was 
+amended to mirror slice pair addition). It also revealed how 
+variable-k-inversion was actually detrimental to performance, polluting the 
+population by equivalent candidates of unaffected fitness, so it was removed 
+from the selection in recent runs. Most importantly, the analysis showed that 
+both crossover operations had little effect on the quality of the sample in 
+this case, so the evolution is almost purely mutation-driven. This might be 
+understood as that crossovers are not very beneficial in this scenario in 
+general, or that good crossover operations are hard to design. For the time 
+being, both the operations have been kept anyway.
 
 The fitness function is based on the number of affected input bits (highly 
 penalized: the input register should stay unchanged), number of incorrect 
@@ -119,21 +133,19 @@ Interestingly, this circuit “stores” some information in the second input bi
 and uncomputes this step later on. This, again, was a result purely of the 
 evolutionary algorithm.
 
-An analogous problem with addition proved somewhat harder to solve using the 
-current methods and prone to early convergence. The reasons are under current 
-investigation. However after the implementation of metaheuristics the 
-algorithm has been able to find zero-error solutions, too, like the following 
-in 53-th generation:
+The evolution works similarly well with an analogous problem of 3-bit 
+incomplete addition, where the following zero-error example solutions have 
+been found within 100 generations:
 
-`9[6] 7[1] 8[2] 9[3] 8[5] 9[25] 9[148] 8[14] 7[4]`
+`9[3] 8[14] 7[4] 8[2] 9[58] 9[6] 9[127] 7[1] 8[5]`
 
-or another without need for `C^3-NOT` first observed in another run in 373-th 
-generation:
-
-`7[1] 8[14] 7[4] 9[28] 9[3] 9[6] 8[2] 9[58] 8[5]`
+`8[14] 9[28] 7[4] 8[2] 9[58] 9[3] 8[5] 9[6] 7[1]`
 
 A deliberately harder test function was chosen to be `x mod 5` with one 5-bit 
 input register and a 3-bit output. After 500 generations of a (10000+30000) 
 scheme candidate solutions with as low as 2 to 5 bit errors out of 96 (`2^5 *
-3`) have frequently been found (along with one zero-error solution in one run
-so far). These are too long to list.
+3`) have frequently been found (along with several zero-error solutions).
+These are too long to list, except one surprisingly elegant zero-error
+exception:
+
+`9[25] 5[12] 9[145] 5[12] 7[1] 8 9[38] 9[6] 8 7[4] 8[2] 8[5] 8[14]`
