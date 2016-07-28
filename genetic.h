@@ -168,11 +168,12 @@ class Population : private std::vector<Candidate> {
 
   /* Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
-  void trim(size_t newSize) {
+  Population<Candidate>& trim(size_t newSize) {
     ensureSorted();
     std::lock_guard<std::mutex> lock(mtx);
     if(size() > newSize)
       this->resize(newSize);
+    return *this;
   }
 
 
