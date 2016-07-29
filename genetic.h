@@ -6,13 +6,14 @@
 
 
 /* The Candidate template. Needs a typename Fitness which can be a simple type
- * or a class but needs to implement operator<. The virtual implementation
- * only keeps track of whether fitness has been computed, and provides the
- * precomputed value when available. The inner function to compute fitness
- * when required, computeFitness(), needs to be provided in specializations. */
+ * or a class but needs to implement zero-argument construction and operator<.
+ * The virtual implementation only keeps track of whether fitness has been
+ * computed, and provides the precomputed value when available. The inner
+ * function to compute fitness when required, computeFitness(), needs to be
+ * provided in specializations. */
 template<typename Fitness>
 class ICandidate {
-  mutable Fitness _fitness;
+  mutable Fitness _fitness{};
   mutable bool fitnessValid = false;
 
   public:
@@ -32,6 +33,8 @@ class ICandidate {
     return c1.fitness() < c2.fitness();
   }
 
+  virtual ~ICandidate() { }
+
   private:
   /* Every Candidate class must implement this routine. */
   virtual Fitness computeFitness() const = 0;
@@ -44,7 +47,7 @@ class ICandidate {
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
-  std::mutex mtx;
+  std::mutex mtx{};
 
   public:
   /* Creates an empty population. */

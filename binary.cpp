@@ -65,7 +65,7 @@ namespace Colours {
   const char* error() { return use ? "\033[1;31m" : ""; }
   const char* highlight() { return use ? "\033[1;32m" : ""; }
   const char* reset() { return use ? "\033[0m" : ""; }
-};
+}
 
 
 class Gene {
@@ -128,7 +128,7 @@ class Gene {
 
 
 class Candidate: public ICandidate<float> {
-  std::vector<Gene> gt;
+  std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
 
@@ -219,7 +219,7 @@ class CandidateFactory {
   static const std::vector<std::pair<GenOp, std::string>> func;
 
   static std::vector<unsigned> weights;
-  std::discrete_distribution<> dFun;
+  std::discrete_distribution<> dFun{};
 
   public:
   CandidateFactory(Source&& _src = nullptr): src(std::move(_src)) {

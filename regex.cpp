@@ -60,12 +60,12 @@ size_t Fitness::tReject;
 
 
 class Candidate: public ICandidate<Fitness> {
-  std::string reS;  /* The string representation of this regex */
-  std::regex re;    /* The internal representation */
-  bool valid;
+  std::string reS{};  /* The string representation of this regex */
+  std::regex re{};    /* The internal representation */
+  bool valid = false;
 
   public:
-  Candidate(std::string _reS): reS(_reS), valid(false) {
+  Candidate(std::string _reS): reS(_reS) {
     try {
       /* Fails some quick check ⇒ considered not valid */
       for(auto &q : Context::qchecks)
@@ -111,7 +111,7 @@ class Candidate: public ICandidate<Fitness> {
   private:
   Fitness computeFitness() const {
     if(!valid)
-      return Fitness{-1, -1};
+      return Fitness{-1, -1, 0};
     int cntA = 0, cntR = 0;
     for(auto &str : Context::dbAccept)
       if(!std::regex_match(str, re))
