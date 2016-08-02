@@ -1,9 +1,17 @@
+#ifndef GENETIC_H
+#define GENETIC_H
+
 #include <vector>
 #include <random>
 #include <algorithm>
 #include <type_traits>
 #include <mutex>
 
+namespace gen {
+
+namespace internal {
+  static thread_local std::ranlux48_base rng{std::random_device()()};
+}
 
 /* The Candidate template. Needs a typename Fitness which can be a simple type
  * or a class but needs to implement zero-argument construction and operator<.
@@ -38,7 +46,7 @@ class ICandidate {
   private:
   /* Every Candidate class must implement this routine. */
   virtual Fitness computeFitness() const = 0;
-};
+}; // class ICandidate
 
 
 /* The Population template. Requires a Candidate class which is expected to be
@@ -150,8 +158,8 @@ class Population : private std::vector<Candidate> {
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected. */
-  template<class Rng>
-  const Candidate& rankSelect(Rng& rng, float bias) {
+  template<class Rng = decltype(internal::rng)>
+  const Candidate& rankSelect(float bias, Rng& rng = internal::rng) {
     static thread_local std::uniform_real_distribution<float> rDist(0, 1);
     ensureSorted();
     float x = rDist(rng);
@@ -209,4 +217,8 @@ class Population : private std::vector<Candidate> {
       sorted = true;
     }
   }
-};
+}; // class Population
+
+} // namespace gen
+
+#endif

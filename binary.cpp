@@ -127,7 +127,7 @@ class Gene {
 };
 
 
-class Candidate: public ICandidate<float> {
+class Candidate: public gen::ICandidate<float> {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
@@ -193,6 +193,9 @@ class Candidate: public ICandidate<float> {
     return (((x + (x >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
   }
 };
+
+
+typedef gen::Population<Candidate> Population;
 
 
 /* Static calculation of integral pow(3, n) */
@@ -575,12 +578,12 @@ int main() {
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
   pre = std::chrono::steady_clock::now();
 
-  Population<Candidate> pop(Config::popSize, [&] { return init.genInit(); });
+  Population pop(Config::popSize, [&] { return init.genInit(); });
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
     /* Create popSize2 children in parallel and admix parents */
-    Population<Candidate> pop2(Config::popSize + Config::popSize2);
+    Population pop2(Config::popSize + Config::popSize2);
 
     {
       std::mutex popMutex;
@@ -597,7 +600,7 @@ int main() {
                * number generator calls won't clash */
               ThreadContext::rng = ThreadContext::rng_t(seed);
 #endif
-              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(ThreadContext::rng, Config::selectBias); });
+              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias, ThreadContext::rng); });
               while(true) {
                 Candidate c = cf.getNew();
                 c.fitness();  // skip lazy evaluation
@@ -621,9 +624,9 @@ int main() {
     pop2.merge(pop);
     
     /* Rank-trim down to popSize */
-    pop = Population<Candidate>(Config::popSize-1, 
+    pop = Population(Config::popSize-1, 
         [&]() -> const Candidate& {
-          const Candidate &c = pop2.rankSelect(ThreadContext::rng, Config::trimBias);
+          const Candidate &c = pop2.rankSelect(Config::trimBias, ThreadContext::rng);
           CandidateFactory::hit(c.getOrigin());
           return c;
         });
@@ -633,7 +636,7 @@ int main() {
 
     /* Summarize */
     const Candidate &best = pop.best();
-    Population<Candidate>::Stat stat = pop.stat();
+    Population::Stat stat = pop.stat();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<

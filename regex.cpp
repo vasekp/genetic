@@ -59,7 +59,7 @@ size_t Fitness::tAccept;
 size_t Fitness::tReject;
 
 
-class Candidate: public ICandidate<Fitness> {
+class Candidate: public gen::ICandidate<Fitness> {
   std::string reS{};  /* The string representation of this regex */
   std::regex re{};    /* The internal representation */
   bool valid = false;
@@ -124,6 +124,9 @@ class Candidate: public ICandidate<Fitness> {
 };
 
 
+typedef gen::Population<Candidate> Population;
+
+
 namespace Context {
   void initDB(std::string fname) {
     std::string r;
@@ -155,7 +158,7 @@ int main() {
   Context::initQC({ "[*+?][*+?]", "[^|]*[*+?][^|]*[*+?][^|]*[*+?]" });
 
   /* Initialize the G0 population */
-  Population<Candidate> pop;
+  Population pop;
   {
     float probTerm = 1/Config::expLength; /* probability of termination; expLength = expected length of strings */
     std::uniform_real_distribution<float> rDist(0, 1);
@@ -174,12 +177,12 @@ int main() {
       std::uniform_real_distribution<float> rDist(0, 1);
 
       /* Generate popSize2 children */
-      Population<Candidate> children(Config::popSize2, [&] {
+      Population children(Config::popSize2, [&] {
           /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
           if(rDist(Context::rng) < Config::pCrossover)
-            return Candidate::crossover(pop.rankSelect(Context::rng, Config::selectBias), pop.rankSelect(Context::rng, Config::selectBias));
+            return Candidate::crossover(pop.rankSelect(Config::selectBias), pop.rankSelect(Config::selectBias));
           else
-            return Candidate::mutate(pop.rankSelect(Context::rng, Config::selectBias));
+            return Candidate::mutate(pop.rankSelect(Config::selectBias));
         });
 
       /* Merge with parents */
@@ -195,7 +198,7 @@ int main() {
       if(c.isValid())
         cnt++;
     auto &best = pop.best();
-    Population<Candidate>::Stat stat = pop.stat();
+    Population::Stat stat = pop.stat();
 
     std::cout << "Gen " << gen << ": " << cnt << " valid, "
       << "fitness " << stat.mean << " ± " << stat.stdev << ", "
