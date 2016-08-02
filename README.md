@@ -145,7 +145,4 @@ A deliberately harder test function was chosen to be `x mod 5` with one 5-bit
 input register and a 3-bit output. After 500 generations of a (10000+30000) 
 scheme candidate solutions with as low as 2 to 5 bit errors out of 96 (`2^5 *
 3`) have frequently been found (along with several zero-error solutions).
-These are too long to list, except one surprisingly elegant zero-error
-exception:
-
-`9[25] 5[12] 9[145] 5[12] 7[1] 8 9[38] 9[6] 8 7[4] 8[2] 8[5] 8[14]`
+These are too long to list.
