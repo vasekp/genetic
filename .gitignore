@@ -2,6 +2,11 @@
 regex
 binary
 *.vys
+*.d
+*.b
+*.p
+*.od
+*.op
 
 # historic files
 hist
