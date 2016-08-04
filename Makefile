@@ -38,7 +38,10 @@ all bench debug optdebug profile optprofile: $$(addsuffix $$(SFX),$$(PROGS))
 clean:
 	rm -f $(ALLTARGETS)
 
-.PHONY: all clean bench debug optdebug profile optprofile
+doc:	$(HEADERS) Doxyfile
+	doxygen Doxyfile
+
+.PHONY: all doc clean bench debug optdebug profile optprofile
 
 
 # basename: binary.d -> binary

@@ -10,25 +10,29 @@
 namespace gen {
 
 namespace internal {
+  /** \brief The default random number generator for Population::rankSelect(). */
   static thread_local std::ranlux48_base rng{std::random_device()()};
 }
 
-/* The Candidate template. Needs a typename Fitness which can be a simple type
- * or a class but needs to implement zero-argument construction and operator<.
- * The virtual implementation only keeps track of whether fitness has been
- * computed, and provides the precomputed value when available. The inner
- * function to compute fitness when required, computeFitness(), needs to be
- * provided in specializations. */
+/** \brief The `Candidate` template.
+ *
+ * Needs a typename `Fitness` which can be a simple type or a class but needs
+ * to implement zero-argument construction and `operator<()`.  The virtual
+ * implementation only keeps track of whether fitness has been computed, and
+ * provides the precomputed value when available. The inner function to
+ * compute fitness when required, computeFitness(), needs to be provided in
+ * specializations. */
 template<typename Fitness>
 class ICandidate {
   mutable Fitness _fitness{};
   mutable bool fitnessValid = false;
 
   public:
+  /** \brief The Fitness type provided for this template specialization. */
   typedef Fitness _FitnessType;
 
-  /* Returns this Candidate's fitness, calculating it on request if not known
-   * from before. */
+  /** \brief Returns this `Candidate`'s fitness, calculating it on request if not
+   * known from before. */
   Fitness fitness() const {
     if(!fitnessValid) {
       _fitness = computeFitness();
@@ -37,47 +41,60 @@ class ICandidate {
     return _fitness;
   }
 
-  friend bool operator< (const ICandidate& c1, const ICandidate& c2) {
+  /** \brief Compares two `Candidate`s by the Fitness's `operator<`. */
+  friend bool operator< (const ICandidate<Fitness>& c1, const ICandidate<Fitness>& c2) {
     return c1.fitness() < c2.fitness();
   }
 
   virtual ~ICandidate() { }
 
-  private:
-  /* Every Candidate class must implement this routine. */
+  protected:
+  /** \brief The internal fitness computation, called the first time this
+   * `Candidate`'s fitness() is queried. Every specialization must implement
+   * this routine. */
   virtual Fitness computeFitness() const = 0;
 }; // class ICandidate
 
 
-/* The Population template. Requires a Candidate class which is expected to be
- * derived from ICandidate although no exposed properties except operator <
- * are accessed. Default constructor creates an empty population. */
+/** \brief The Population template.
+ *
+ * Requires a Candidate class which is expected to be derived from ICandidate
+ * although no exposed properties except `operator<` are accessed. */
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
   std::mutex mtx{};
 
   public:
-  /* Creates an empty population. */
+  /** \brief Creates an empty population. */
   Population() = default;
 
-  /* Create an empty population but preallocate space for count candidates. */
+  /** \brief Creates an empty population but preallocate space for count
+   * candidates. */
   Population(size_t count) {
     this->reserve(count);
   }
 
-  /* Draws a population from a source function. */
-  template<class F>
-  Population(size_t count, F src) {
+  /** \brief Creates a population of size `count` whose candidates are results
+   * of calls to the source function `src`. For discussion about the latter
+   * parameter see add(size_t, Source).
+   *
+   * \see add(size_t, Source) */
+  template<class Source>
+  Population(size_t count, Source src) {
     add(count, src);
   }
 
   /* The Big Four: trivial but we need them because the mutex can't be 
    * default copied or moved */
+
+  /** \brief The copy constructor. */
   Population(const Population& _p): std::vector<Candidate>(_p), sorted(_p.sorted) { }
 
+  /** \brief The move constructor. */
   Population(Population&& _p): std::vector<Candidate>(std::move(_p)), sorted(_p.sorted) { }
 
+  /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
     std::lock_guard<std::mutex> lock(mtx);
     std::vector<Candidate>::operator=(_p);
@@ -85,6 +102,7 @@ class Population : private std::vector<Candidate> {
     return *this;
   }
 
+  /** \brief Move assignment operator. */
   Population& operator=(Population&& _p) {
     std::lock_guard<std::mutex> lock(mtx);
     std::vector<Candidate>::operator=(std::move(_p));
@@ -92,28 +110,30 @@ class Population : private std::vector<Candidate> {
     return *this;
   }
 
-  /* Pushes back a new candidate. */
+  /** \brief Adds a new candidate. */
   void add(const Candidate& c) {
     std::lock_guard<std::mutex> lock(mtx);
     this->push_back(c);
     sorted = false;
   }
 
-  /* Pushes back a new candidate using the move semantics. */
+  /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
     std::lock_guard<std::mutex> lock(mtx);
     this->push_back(std::forward<Candidate>(c));
     sorted = false;
   }
 
-  /* Draws n candidates from a source function
-   * F can be:
-   * - std::function<Candidate>: returning by copy
-   * - std::function<const Candidate&>: returning by reference
-   * - lambda returning either
+  /** \brief Draws `count` candidates from a source function `src`.
+   *
+   * Source can be:
+   * - `std::function<Candidate>`: returning by copy,
+   * - `std::function<const Candidate&>`: returning by reference,
+   * - a lambda function returning either.
+   *
    * The template allows for optimizations (inlining) in the latter case. */
-  template<class F>
-  void add(size_t count, F src) {
+  template<class Source>
+  void add(size_t count, Source src) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
@@ -121,16 +141,7 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
-  /* Draws n candidates from a source function (returning reference). */
-  void add(size_t count, std::function<const Candidate&()> src) {
-    std::lock_guard<std::mutex> lock(mtx);
-    this->reserve(size() + count);
-    for(size_t j = 0; j < count; j++)
-      this->push_back(src());
-    sorted = false;
-  }
-
-  /* Takes all candidates from another population. */
+  /** \brief Takes all candidates from another population. */
   void add(Population<Candidate>& pop) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
@@ -138,7 +149,7 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
-  /* Like add(Population&) but moving the contents of the argument. */
+  /** \brief Like add(Population&) but moving the contents of the argument. */
   void merge(Population<Candidate>& pop) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
@@ -153,8 +164,9 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::clear;
   using std::vector<Candidate>::operator[];
 
-  /* Retrieves a candidate randomly chosen by rank-based selection.
-   * selectBias > 0 determines how much low-fitness solutions are preferred.
+  /** \brief Retrieves a candidate randomly chosen by rank-based selection.
+   *
+   * bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected. */
@@ -169,15 +181,16 @@ class Population : private std::vector<Candidate> {
       return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
   }
 
-  /* Returns unconditionally the best candidate of population. If more
-   * candidates have equal best fitness the returned reference may be any of
-   * them. */
+  /** \brief Returns the best candidate of population.
+   *
+   * If more candidates have equal best fitness the returned reference may be
+   * any of them. */
   const Candidate& best() {
     ensureSorted();
     return this->front();
   }
 
-  /* Reduces the population to a maximum size given by the argument,
+  /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample. */
   Population<Candidate>& trim(size_t newSize) {
     ensureSorted();
@@ -188,16 +201,24 @@ class Population : private std::vector<Candidate> {
   }
 
 
+  /** \brief The return type of stat(). */
   struct Stat {
-    double mean;
-    double stdev;
+    double mean;  ///< The mean fitness of the Population.
+    double stdev; ///< The standard deviation of fitness in the Population.
   };
 
-  /* Returns the mean fitness of the population and the standard deviation.
+  /** \brief Returns the mean fitness of the population and the standard deviation.
+   *
    * Conditional member (using SFINAE) for candidate classes whose fitness is
-   * a simple floating point type or allows an implicit convertion to one. */
+   * a simple floating point type or allows an implicit convertion to one. The
+   * method does not appear in specializations for which this condition is not
+   * satisfied. */
+#ifdef DOXYGEN
+  Stat stat() {
+#else
   template<typename FT = typename Candidate::_FitnessType>
   auto stat() -> typename std::enable_if<std::is_convertible<FT, double>::value, Stat>::type {
+#endif
     double f, sf = 0, sf2 = 0;
     for(Candidate &c : *this) {
       f = c.fitness();
