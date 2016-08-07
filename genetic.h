@@ -18,6 +18,20 @@ namespace gen {
  * Population::rankSelect(). */
 static thread_local std::ranlux48_base rng{std::random_device()()};
 
+/* Helpers for Population::rankSelect<std::exp> */
+namespace internal {
+  template<double (*)(double)>
+    struct is_exp: std::false_type { };
+
+  template<>
+    struct is_exp<std::exp>: std::true_type { };
+
+  template<double (*f)(double)>
+  double eval_in_product(double x, double y) {
+    return f(x * y);
+  }
+}
+
 /** \brief The `Candidate` template.
  *
  * Needs a typename `Fitness` which can be a simple type or a class but needs
@@ -170,20 +184,81 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
-   * bias > 0 determines how much low-fitness solutions are preferred.
+   * This function accepts as a template parameter a name of a function
+   * `double(double)` that will receive arguments linearly spaced between
+   * `1/size * bias` and `bias` for candidates ranked `1` through `size` and
+   * its return value will be interpreted as inverse probability, and as such,
+   * is expected to be positive and strictly increasing in its argument. This
+   * function will be built in at compile time, eliminating a function pointer
+   * lookup.  The default value is `std::exp`, for which an equivalent fast
+   * replacement algorithm is provided.
+   *
+   * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
-   * likely to be selected. */
-  template<class Rng = decltype(rng)>
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   * 
+   * \returns a constant reference to a randomly chosen `Candidate`. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& rankSelect(float bias, Rng& rng = rng) {
-    static thread_local std::uniform_real_distribution<float> rDist(0, 1);
+    if(internal::is_exp<fun>::value)
+      return rankSelect_exp(bias, rng);
+    else
+      return rankSelect<
+        static_cast<double(*)(double, double)>(&internal::eval_in_product<fun>)
+        > (bias);
+  }
+
+  /** \brief Retrieves a candidate randomly chosen by rank-based selection.
+   *
+   * This function accepts as a template parameter a name of a function
+   * `double(double, double)` that will receive its first argument linearly
+   * spaced between `1/size` and `1` for candidates ranked `1` through `size`
+   * and second argument equal to `bias` and its return value will be
+   * interpreted as inverse probability. As such, is expected to be positive
+   * and strictly increasing in its argument. This function will be built in
+   * at compile time, eliminating a function pointer lookup. A usual choice
+   * for `fun` is `std::pow`.
+   *
+   * \param bias > 0 determines how much low-fitness solutions are preferred.
+   * Zero would mean no account on fitness in the selection process
+   * whatsoever. The bigger the value the more candidates with low fitness are
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   * 
+   * \returns a constant reference to a randomly chosen `Candidate`. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+    static thread_local std::discrete_distribution<size_t> iDist{};
+    static thread_local size_t last_sz = 0;
+    static thread_local std::vector<double> probs{};
+    size_t sz = size();
+    if(sz != last_sz) {
+      probs.clear();
+      probs.reserve(sz);
+      for(size_t i = 0; i < sz; i++)
+        probs.push_back(1 / fun((double)(i+1) / sz, bias));
+      iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
+      last_sz = sz;
+    }
     ensureSorted();
-    float x = rDist(rng);
+    return (*this)[iDist(rng)];
+  }
+
+  private:
+  template<class Rng>
+  const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
+    static thread_local std::uniform_real_distribution<double> rDist(0, 1);
+    ensureSorted();
+    double x = rDist(rng);
     if(x == 1)
       return this->back();
     else
       return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
   }
+
+  public:
 
   /** \brief Returns the best candidate of population.
    *
@@ -211,7 +286,8 @@ class Population : private std::vector<Candidate> {
     double stdev; ///< The standard deviation of fitness in the Population.
   };
 
-  /** \brief Returns the mean fitness of the population and the standard deviation.
+  /** \brief Returns the mean fitness of the population and the standard
+   * deviation.
    *
    * Conditional member (using SFINAE) for candidate classes whose fitness is
    * a simple floating point type or allows an implicit convertion to one. The
