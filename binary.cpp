@@ -11,12 +11,6 @@
 #include "genetic.h"
 
 
-namespace ThreadContext {
-  typedef std::ranlux48_base rng_t;
-  thread_local rng_t rng;
-}
-
-
 namespace Config {
   const float selectBias = 1.0;
   const float trimBias = 2.5;
@@ -238,13 +232,13 @@ class CandidateFactory {
     std::vector<Gene> gt;
     gt.reserve(Config::expLengthIni);
     do {
-      gt.push_back(Gene(dTgt(ThreadContext::rng), dCtrl(ThreadContext::rng)));
-    } while(dUni(ThreadContext::rng) > probTerm);
+      gt.push_back(Gene(dTgt(gen::rng), dCtrl(gen::rng)));
+    } while(dUni(gen::rng) > probTerm);
     return Candidate(std::move(gt));
   }
 
   Candidate getNew() {
-    int index = dFun(ThreadContext::rng);
+    int index = dFun(gen::rng);
     return (this->*func[index].first)().setOrigin(index);
   }
 
@@ -287,8 +281,8 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    unsigned pos = ThreadContext::rng() % p.gt.size();
-    gm[pos] = Gene(dTgt(ThreadContext::rng), gm[pos].control());
+    unsigned pos = gen::rng() % p.gt.size();
+    gm[pos] = Gene(dTgt(gen::rng), gm[pos].control());
     return Candidate(std::move(gm));
   }
 
@@ -297,8 +291,8 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    unsigned pos = ThreadContext::rng() % p.gt.size();
-    gm[pos] = Gene(gm[pos].target(), gm[pos].control() ^ dCtrl(ThreadContext::rng));
+    unsigned pos = gen::rng() % p.gt.size();
+    gm[pos] = Gene(gm[pos].target(), gm[pos].control() ^ dCtrl(gen::rng));
     return Candidate(std::move(gm));
   }
 
@@ -307,20 +301,20 @@ class CandidateFactory {
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
-    unsigned pos = ThreadContext::rng() % p.gt.size();
-    gm[pos] = Gene(dTgt(ThreadContext::rng), gm[pos].control() ^ dCtrl(ThreadContext::rng));
+    unsigned pos = gen::rng() % p.gt.size();
+    gm[pos] = Gene(dTgt(gen::rng), gm[pos].control() ^ dCtrl(gen::rng));
     return Candidate(std::move(gm));
   }
 
   Candidate mAddSlice() {
     auto &p = src();
-    unsigned pos = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos = gen::rng() % (p.gt.size() + 1);
     std::vector<Gene> ins;
     ins.reserve(Config::expLengthAdd);
     double probTerm = 1/Config::expLengthAdd;
     do {
-      ins.emplace_back(dTgt(ThreadContext::rng), dCtrl(ThreadContext::rng));
-    } while(dUni(ThreadContext::rng) > probTerm);
+      ins.emplace_back(dTgt(gen::rng), dCtrl(gen::rng));
+    } while(dUni(gen::rng) > probTerm);
     std::vector<Gene> gm;
     gm.reserve(p.gt.size() + ins.size());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
@@ -331,16 +325,16 @@ class CandidateFactory {
 
   Candidate mAddPairs() {
     auto &p = src();
-    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-             pos2 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = gen::rng() % (p.gt.size() + 1),
+             pos2 = gen::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> ins;
     ins.reserve(2*Config::expLengthAdd);
     double probTerm = 1/Config::expLengthAdd;
     do {
-      ins.emplace_back(dTgt(ThreadContext::rng), dCtrl(ThreadContext::rng));
-    } while(dUni(ThreadContext::rng) > probTerm);
+      ins.emplace_back(dTgt(gen::rng), dCtrl(gen::rng));
+    } while(dUni(gen::rng) > probTerm);
     std::vector<Gene> gm;
     gm.reserve(p.gt.size() + 2*ins.size());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
@@ -355,8 +349,8 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-             pos2 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = gen::rng() % (p.gt.size() + 1),
+             pos2 = gen::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> gm;
@@ -371,9 +365,9 @@ class CandidateFactory {
     auto sz = p.gt.size();
     if(sz == 0)
       return p;
-    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = gen::rng() % (p.gt.size() + 1);
     /* Integer with the same distribution in mAddSlice */
-    int len = 1 + floor(log(dUni(ThreadContext::rng)) / log(1 - 1/Config::expLengthAdd));
+    int len = 1 + floor(log(dUni(gen::rng)) / log(1 - 1/Config::expLengthAdd));
     unsigned pos2 = pos1 + len > sz ? sz : pos1 + len;
     std::vector<Gene> gm;
     gm.reserve(p.gt.size() - (pos2 - pos1));
@@ -387,7 +381,7 @@ class CandidateFactory {
     std::vector<Gene> gm;
     gm.reserve(p.gt.size());
     for(auto& g : p.gt)
-      if(dUni(ThreadContext::rng) >= Config::pDeleteUniform)
+      if(dUni(gen::rng) >= Config::pDeleteUniform)
         gm.push_back(g);
     return Candidate(std::move(gm));
   }
@@ -396,7 +390,7 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    unsigned pos = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos = gen::rng() % (p.gt.size() + 1);
     std::vector<Gene> gm;
     gm.reserve(p.gt.size());
     gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
@@ -408,9 +402,9 @@ class CandidateFactory {
     auto &p = src();
     if(p.gt.size() == 0)
       return p;
-    unsigned pos1 = ThreadContext::rng() % (p.gt.size() + 1),
-             pos2 = ThreadContext::rng() % (p.gt.size() + 1),
-             pos3 = ThreadContext::rng() % (p.gt.size() + 1);
+    unsigned pos1 = gen::rng() % (p.gt.size() + 1),
+             pos2 = gen::rng() % (p.gt.size() + 1),
+             pos3 = gen::rng() % (p.gt.size() + 1);
     if(pos2 < pos1) std::swap(pos1, pos2);
     if(pos3 < pos1) std::swap(pos1, pos3);
     if(pos3 < pos2) std::swap(pos2, pos3);
@@ -429,7 +423,7 @@ class CandidateFactory {
       return p;
     std::vector<unsigned> pos;
     for(int i = 0; i < 4; i++)
-      pos.push_back(ThreadContext::rng() % (p.gt.size() + 1));
+      pos.push_back(gen::rng() % (p.gt.size() + 1));
     std::sort(pos.begin(), pos.end());
     std::vector<Gene> gm;
     gm.reserve(p.gt.size());
@@ -446,8 +440,8 @@ class CandidateFactory {
     auto sz = p.gt.size();
     if(sz == 0)
       return p;
-    unsigned pos1 = ThreadContext::rng() % (sz + 1),
-             pos2 = ThreadContext::rng() % (sz + 1);
+    unsigned pos1 = gen::rng() % (sz + 1),
+             pos2 = gen::rng() % (sz + 1);
     if(pos2 < pos1)
       std::swap(pos1, pos2);
     std::vector<Gene> gm;
@@ -463,8 +457,8 @@ class CandidateFactory {
          &p2 = src();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
-    unsigned pos1 = ThreadContext::rng() % (gt1.size() + 1),
-             pos2 = ThreadContext::rng() % (gt2.size() + 1);
+    unsigned pos1 = gen::rng() % (gt1.size() + 1),
+             pos2 = gen::rng() % (gt2.size() + 1);
     std::vector<Gene> gm;
     gm.reserve(pos1 + (gt2.size() - pos2));
     gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1);
@@ -477,10 +471,10 @@ class CandidateFactory {
          &p2 = src();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
-    unsigned pos1l = ThreadContext::rng() % (gt1.size() + 1),
-             pos1r = ThreadContext::rng() % (gt1.size() + 1),
-             pos2l = ThreadContext::rng() % (gt2.size() + 1),
-             pos2r = ThreadContext::rng() % (gt2.size() + 1);
+    unsigned pos1l = gen::rng() % (gt1.size() + 1),
+             pos1r = gen::rng() % (gt1.size() + 1),
+             pos2l = gen::rng() % (gt2.size() + 1),
+             pos2r = gen::rng() % (gt2.size() + 1);
     if(pos1r < pos1l) std::swap(pos1l, pos1r);
     if(pos2r < pos2l) std::swap(pos2l, pos2r);
     std::vector<Gene> gm;
@@ -568,9 +562,7 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
 
 int main() {
 #ifdef BENCH
-  ThreadContext::rng = ThreadContext::rng_t(1);
-#else
-  ThreadContext::rng = ThreadContext::rng_t((std::random_device())());
+  gen::rng.seed(1);
 #endif
   Colours::use = isatty(1);
   CandidateFactory init;
@@ -592,15 +584,13 @@ int main() {
       /* Split the work between a max number of threads */
       for(size_t k = 0; k < std::thread::hardware_concurrency(); k++) {
 
-        auto seed = ThreadContext::rng();
         /* Let each thread keep adding candidates until the goal is met */
-        tasks.push_back(std::thread([&, seed]
+        tasks.push_back(std::thread([&]
             {
               /* Prepare a separate CandidateFactory for each thread so that random
                * number generator calls won't clash */
-              ThreadContext::rng = ThreadContext::rng_t(seed);
 #endif
-              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias, ThreadContext::rng); });
+              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias); });
               while(true) {
                 Candidate c = cf.getNew();
                 c.fitness();  // skip lazy evaluation
@@ -626,7 +616,7 @@ int main() {
     /* Rank-trim down to popSize */
     pop = Population(Config::popSize-1, 
         [&]() -> const Candidate& {
-          const Candidate &c = pop2.rankSelect(Config::trimBias, ThreadContext::rng);
+          const Candidate &c = pop2.rankSelect(Config::trimBias);
           CandidateFactory::hit(c.getOrigin());
           return c;
         });

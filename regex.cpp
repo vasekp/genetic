@@ -6,8 +6,6 @@
 #include "genetic.h"
 
 namespace Context {
-  std::mt19937 rng;
-
   std::vector<std::string> dbAccept;  /* strings to be accepted */
   std::vector<std::string> dbReject;  /* strings to be rejected */
   std::vector<std::regex> qchecks;    /* quick validity checks */
@@ -94,17 +92,17 @@ class Candidate: public gen::ICandidate<Fitness> {
   static Candidate crossover(const Candidate& p1, const Candidate& p2) {
     std::string s1 = p1.getRE();
     std::string s2 = p2.getRE();
-    int c1 = std::uniform_int_distribution<>(0,s1.length())(Context::rng);
-    int c2 = std::uniform_int_distribution<>(0,s2.length())(Context::rng);
+    int c1 = std::uniform_int_distribution<>(0,s1.length())(gen::rng);
+    int c2 = std::uniform_int_distribution<>(0,s2.length())(gen::rng);
     return Candidate(s1.substr(0, c1) + s2.substr(c2));
   }
 
   /* One-allele mutation */
   static Candidate mutate(const Candidate& p) {
     std::string str = p.getRE();
-    int ix = std::uniform_int_distribution<>(0, str.length())(Context::rng);
+    int ix = std::uniform_int_distribution<>(0, str.length())(gen::rng);
     str[ix] = Context::pool[
-      std::uniform_int_distribution<>(0, Context::pool.length())(Context::rng)];
+      std::uniform_int_distribution<>(0, Context::pool.length())(gen::rng)];
     return Candidate(str);
   }
 
@@ -149,8 +147,6 @@ namespace Context {
 
 
 int main() {
-  Context::rng = std::mt19937((std::random_device())());
-
   /* Read the database */
   Context::initDB("regex.sz");
 
@@ -165,8 +161,8 @@ int main() {
     std::uniform_int_distribution<> iDist(0, Context::pool.length());
     pop.add(Config::popSize, [&] {
           std::vector<char> vec;
-          while(rDist(Context::rng) > probTerm)
-            vec.push_back(Context::pool[iDist(Context::rng)]);
+          while(rDist(gen::rng) > probTerm)
+            vec.push_back(Context::pool[iDist(gen::rng)]);
           return Candidate(std::string(vec.begin(), vec.end()));
         });
   }
@@ -179,7 +175,7 @@ int main() {
       /* Generate popSize2 children */
       Population children(Config::popSize2, [&] {
           /* pCrossover: crossover (adding only one child); 1-pCrossover: mutation */
-          if(rDist(Context::rng) < Config::pCrossover)
+          if(rDist(gen::rng) < Config::pCrossover)
             return Candidate::crossover(pop.rankSelect(Config::selectBias), pop.rankSelect(Config::selectBias));
           else
             return Candidate::mutate(pop.rankSelect(Config::selectBias));

@@ -7,12 +7,16 @@
 #include <type_traits>
 #include <mutex>
 
+/** \brief The gen namespace. */
 namespace gen {
 
-namespace internal {
-  /** \brief The default random number generator for Population::rankSelect(). */
-  static thread_local std::ranlux48_base rng{std::random_device()()};
-}
+/** \brief The default random number generator for Population::rankSelect().
+ *
+ * A strong RNG is not a necessity for genetic applications, so speed was main
+ * preference in choosing `ranlux48`. Can be accessed freely by applications
+ * of the framework. Similarly, alternative RNGs may be provided to
+ * Population::rankSelect(). */
+static thread_local std::ranlux48_base rng{std::random_device()()};
 
 /** \brief The `Candidate` template.
  *
@@ -170,8 +174,8 @@ class Population : private std::vector<Candidate> {
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected. */
-  template<class Rng = decltype(internal::rng)>
-  const Candidate& rankSelect(float bias, Rng& rng = internal::rng) {
+  template<class Rng = decltype(rng)>
+  const Candidate& rankSelect(float bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<float> rDist(0, 1);
     ensureSorted();
     float x = rDist(rng);
