@@ -1,9 +1,7 @@
 #include <iostream>
 #include <random>
 #include <functional>
-#include <thread>
 #include <unistd.h> // isatty()
-#include <mutex>
 #include <chrono>
 #include <atomic>
 #include <iomanip>
@@ -206,20 +204,19 @@ struct pow3<0> {
 
 class CandidateFactory {
   typedef Candidate (CandidateFactory::*GenOp)();
-  typedef std::function<const Candidate&()> Source;
 
-  Source src;
-  std::uniform_real_distribution<> dUni{0, 1};
-  std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
-  std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
+  static thread_local std::uniform_real_distribution<> dUni;
+  static thread_local std::uniform_int_distribution<unsigned> dTgt;
+  static thread_local std::uniform_int_distribution<unsigned> dCtrl;
 
   static const std::vector<std::pair<GenOp, std::string>> func;
-
   static std::vector<unsigned> weights;
   std::discrete_distribution<> dFun{};
 
+  Population& pop;
+
   public:
-  CandidateFactory(Source&& _src = nullptr): src(std::move(_src)) {
+  CandidateFactory(Population& _pop): pop(_pop) {
     if(weights.size() == 0) {
       weights = std::vector<unsigned>(func.size(), 1);
       normalizeWeights();
@@ -227,7 +224,7 @@ class CandidateFactory {
     applyWeights();
   }
 
-  Candidate genInit() {
+  static Candidate genInit() {
     const static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
     std::vector<Gene> gt;
     gt.reserve(Config::expLengthIni);
@@ -276,8 +273,12 @@ class CandidateFactory {
   }
 
   private:
+  const Candidate& get() {
+    return pop.rankSelect(Config::selectBias);
+  }
+
   Candidate mAlterTarget() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
@@ -287,7 +288,7 @@ class CandidateFactory {
   }
 
   Candidate mAlterControl() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
@@ -297,7 +298,7 @@ class CandidateFactory {
   }
 
   Candidate mAlterSingle() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     auto gm = p.gt;
@@ -307,7 +308,7 @@ class CandidateFactory {
   }
 
   Candidate mAddSlice() {
-    auto &p = src();
+    auto &p = get();
     unsigned pos = gen::rng() % (p.gt.size() + 1);
     std::vector<Gene> ins;
     ins.reserve(Config::expLengthAdd);
@@ -324,7 +325,7 @@ class CandidateFactory {
   }
 
   Candidate mAddPairs() {
-    auto &p = src();
+    auto &p = get();
     unsigned pos1 = gen::rng() % (p.gt.size() + 1),
              pos2 = gen::rng() % (p.gt.size() + 1);
     if(pos2 < pos1)
@@ -346,7 +347,7 @@ class CandidateFactory {
   }
 
   Candidate mDeleteSlice() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     unsigned pos1 = gen::rng() % (p.gt.size() + 1),
@@ -361,7 +362,7 @@ class CandidateFactory {
   }
 
   Candidate mDeleteSliceShort() {
-    auto &p = src();
+    auto &p = get();
     auto sz = p.gt.size();
     if(sz == 0)
       return p;
@@ -377,7 +378,7 @@ class CandidateFactory {
   }
 
   Candidate mDeleteUniform() {
-    auto &p = src();
+    auto &p = get();
     std::vector<Gene> gm;
     gm.reserve(p.gt.size());
     for(auto& g : p.gt)
@@ -387,7 +388,7 @@ class CandidateFactory {
   }
 
   Candidate mSplitSwap2() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     unsigned pos = gen::rng() % (p.gt.size() + 1);
@@ -399,7 +400,7 @@ class CandidateFactory {
   }
 
   Candidate mSplitSwap4() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     unsigned pos1 = gen::rng() % (p.gt.size() + 1),
@@ -418,7 +419,7 @@ class CandidateFactory {
   }
 
   Candidate mSplitSwap5() {
-    auto &p = src();
+    auto &p = get();
     if(p.gt.size() == 0)
       return p;
     std::vector<unsigned> pos;
@@ -436,7 +437,7 @@ class CandidateFactory {
   }
 
   Candidate mReverseSlice() {
-    auto &p = src();
+    auto &p = get();
     auto sz = p.gt.size();
     if(sz == 0)
       return p;
@@ -453,8 +454,8 @@ class CandidateFactory {
   }
 
   Candidate crossover1() {
-    auto &p1 = src(),
-         &p2 = src();
+    auto &p1 = get(),
+         &p2 = get();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
     unsigned pos1 = gen::rng() % (gt1.size() + 1),
@@ -467,8 +468,8 @@ class CandidateFactory {
   }
 
   Candidate crossover2() {
-    auto &p1 = src(),
-         &p2 = src();
+    auto &p1 = get(),
+         &p2 = get();
     auto &gt1 = p1.gt,
          &gt2 = p2.gt;
     unsigned pos1l = gen::rng() % (gt1.size() + 1),
@@ -486,9 +487,9 @@ class CandidateFactory {
   }
 
   Candidate threeWay() {
-    auto &p1 = src(),
-         &p2 = src(),
-         &p3 = src();
+    auto &p1 = get(),
+         &p2 = get(),
+         &p3 = get();
     std::vector<Gene> gm;
     gm.reserve(p1.gt.size() + p2.gt.size() + p3.gt.size());
     gm.insert(gm.end(), p1.gt.begin(), p1.gt.end());
@@ -497,6 +498,10 @@ class CandidateFactory {
     return Candidate(std::move(gm));
   }
 };
+
+thread_local std::uniform_real_distribution<> CandidateFactory::dUni{0, 1};
+thread_local std::uniform_int_distribution<unsigned> CandidateFactory::dTgt{0, Config::nBit - 1};
+thread_local std::uniform_int_distribution<unsigned> CandidateFactory::dCtrl{0, pow3<Config::nBit-1>::value - 1};
 
 
 void Candidate::dump(std::ostream& os) const {
@@ -565,49 +570,25 @@ int main() {
   gen::rng.seed(1);
 #endif
   Colours::use = isatty(1);
-  CandidateFactory init;
 
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
   pre = std::chrono::steady_clock::now();
 
-  Population pop(Config::popSize, [&] { return init.genInit(); });
+  Population pop(Config::popSize, [&] { return CandidateFactory::genInit(); });
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
     /* Create popSize2 children in parallel and admix parents */
     Population pop2(Config::popSize + Config::popSize2);
+    CandidateFactory cf{pop};
 
-    {
-      std::mutex popMutex;
 #ifndef BENCH
-      std::vector<std::thread> tasks;
-      /* Split the work between a max number of threads */
-      for(size_t k = 0; k < std::thread::hardware_concurrency(); k++) {
-
-        /* Let each thread keep adding candidates until the goal is met */
-        tasks.push_back(std::thread([&]
-            {
-              /* Prepare a separate CandidateFactory for each thread so that random
-               * number generator calls won't clash */
+#pragma omp parallel for schedule(dynamic)
 #endif
-              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias); });
-              while(true) {
-                Candidate c = cf.getNew();
-                c.fitness();  // skip lazy evaluation
-                {
-                  std::lock_guard<std::mutex> lock(popMutex);
-                  if(pop2.size() < Config::popSize2)
-                    pop2.add(std::move(c));
-                  else
-                    break;
-                }
-              }
-#ifndef BENCH
-            }));
-      }
-      for(auto& task : tasks)
-        task.join();
-#endif
+    for(size_t k = 0; k < Config::popSize2; k++) {
+      Candidate c = cf.getNew();
+      c.fitness();  // skip lazy evaluation
+      pop2.add(std::move(c));
     }
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
