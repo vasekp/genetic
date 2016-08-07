@@ -1,9 +1,7 @@
 #include <iostream>
 #include <random>
 #include <functional>
-#include <thread>
 #include <unistd.h> // isatty()
-#include <mutex>
 #include <chrono>
 #include <atomic>
 #include <iomanip>
@@ -576,38 +574,15 @@ int main() {
 
     /* Create popSize2 children in parallel and admix parents */
     Population pop2(Config::popSize + Config::popSize2);
+    CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias); });
 
-    {
-      std::mutex popMutex;
 #ifndef BENCH
-      std::vector<std::thread> tasks;
-      /* Split the work between a max number of threads */
-      for(size_t k = 0; k < std::thread::hardware_concurrency(); k++) {
-
-        /* Let each thread keep adding candidates until the goal is met */
-        tasks.push_back(std::thread([&]
-            {
-              /* Prepare a separate CandidateFactory for each thread so that random
-               * number generator calls won't clash */
+#pragma omp parallel for schedule(dynamic)
 #endif
-              CandidateFactory cf([&]() -> const Candidate& { return pop.rankSelect(Config::selectBias); });
-              while(true) {
-                Candidate c = cf.getNew();
-                c.fitness();  // skip lazy evaluation
-                {
-                  std::lock_guard<std::mutex> lock(popMutex);
-                  if(pop2.size() < Config::popSize2)
-                    pop2.add(std::move(c));
-                  else
-                    break;
-                }
-              }
-#ifndef BENCH
-            }));
-      }
-      for(auto& task : tasks)
-        task.join();
-#endif
+    for(size_t k = 0; k < Config::popSize2; k++) {
+      Candidate c = cf.getNew();
+      c.fitness();  // skip lazy evaluation
+      pop2.add(std::move(c));
     }
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
