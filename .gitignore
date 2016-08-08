@@ -8,6 +8,7 @@ binary
 *.od
 *.op
 doc
+gmon.out
 
 # historic files
 hist
