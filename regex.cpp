@@ -182,7 +182,7 @@ int main() {
         });
 
       /* Merge with parents */
-      pop.merge(children);
+      pop.add(std::move(children));
     }
 
     /* Trim to popSize */

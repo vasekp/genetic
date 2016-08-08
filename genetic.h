@@ -7,6 +7,10 @@
 #include <type_traits>
 #include <mutex>
 
+#ifndef NOINLINE
+#define NOINLINE
+#endif
+
 /** \brief The gen namespace. */
 namespace gen {
 
@@ -151,7 +155,7 @@ class Population : private std::vector<Candidate> {
    *
    * The template allows for optimizations (inlining) in the latter case. */
   template<class Source>
-  void add(size_t count, Source src) {
+  void NOINLINE add(size_t count, Source src) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
@@ -159,21 +163,31 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 
-  /** \brief Takes all candidates from another population. */
-  void add(Population<Candidate>& pop) {
+  /** \brief Copies all candidates from a vector of `Candidate`s. */
+  void NOINLINE add(const std::vector<Candidate>& pop) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
     this->insert(end(), pop.begin(), pop.end());
     sorted = false;
   }
 
-  /** \brief Like add(Population&) but moving the contents of the argument. */
-  void merge(Population<Candidate>& pop) {
+  /** \brief Moves all candidates from a vector of `Candidate`s. */
+  void NOINLINE add(std::vector<Candidate>&& pop) {
     std::lock_guard<std::mutex> lock(mtx);
     this->reserve(size() + pop.size());
     this->insert(end(), std::make_move_iterator(pop.begin()), std::make_move_iterator(pop.end()));
     pop.clear();
     sorted = false;
+  }
+
+  /** \brief Copies all candidates from another Population. */
+  void add(const Population<Candidate>& pop) {
+    return merge(static_cast<const std::vector<Candidate>&>(pop));
+  }
+
+  /** \brief Moves all candidates from another Population. */
+  void add(Population<Candidate>&& pop) {
+    return add(static_cast<std::vector<Candidate>&&>(pop));
   }
 
   using std::vector<Candidate>::begin;
@@ -201,7 +215,7 @@ class Population : private std::vector<Candidate> {
    * 
    * \returns a constant reference to a randomly chosen `Candidate`. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& rankSelect(float bias, Rng& rng = rng) {
+  const Candidate& NOINLINE rankSelect(float bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
       return rankSelect_exp(bias, rng);
     else
@@ -229,7 +243,7 @@ class Population : private std::vector<Candidate> {
    * 
    * \returns a constant reference to a randomly chosen `Candidate`. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+  const Candidate& NOINLINE rankSelect(double bias, Rng& rng = rng) {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};

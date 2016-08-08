@@ -6,6 +6,12 @@
 #include <atomic>
 #include <iomanip>
 
+#ifdef BENCH
+#define NOINLINE __attribute__((noinline))
+#else
+#define NOINLINE
+#endif
+
 #include "genetic.h"
 
 
@@ -67,7 +73,7 @@ class Gene {
   uint32_t hw;      // Hamming weight of ctrl
 
   public:
-  Gene(unsigned _target, unsigned _control): tgt(_target), ctrl(0), ctrlEnc(_control), hw(0) {
+  NOINLINE Gene(unsigned _target, unsigned _control): tgt(_target), ctrl(0), ctrlEnc(_control), hw(0) {
     /* Convert from base 3 to base 2: 0,1 become 0; 2 becomes 1. This way 1 is
      * twice less likely than 0 at any position if the original distribution
      * was uniform. Thus plain NOTs and C-NOTs will be generated more often
@@ -104,7 +110,7 @@ class Gene {
       : src;
   }
 
-  friend std::ostream& operator<< (std::ostream& os, const Gene& g) {
+  friend std::ostream& NOINLINE operator<< (std::ostream& os, const Gene& g) {
     os << g.tgt+1;
     auto c = g.ctrl;
     if(c != 0) {
@@ -157,7 +163,7 @@ class Candidate: public gen::ICandidate<float> {
   friend class CandidateFactory;
 
   private:
-  float computeFitness() const {
+  float NOINLINE computeFitness() const {
     register unsigned work;
     unsigned cmp;
     unsigned mism = 0;
@@ -237,7 +243,7 @@ class CandidateFactory {
     return Candidate(std::move(gt));
   }
 
-  Candidate getNew() {
+  Candidate NOINLINE getNew() {
     int index = dFun(gen::rng);
     return (this->*func[index].first)().setOrigin(index);
   }
@@ -503,7 +509,7 @@ class CandidateFactory {
 };
 
 
-void Candidate::dump(std::ostream& os) const {
+inline void Candidate::dump(std::ostream& os) const {
   register unsigned work;
   for(int in = 0; in < (1 << Config::nIn); in++) {
     work = in;
@@ -581,7 +587,7 @@ int main() {
     Population pop2(Config::popSize + Config::popSize2);
     CandidateFactory cf{pop};
 
-#ifndef BENCH
+#ifndef SINGLE
 #pragma omp parallel for schedule(dynamic)
 #endif
     for(size_t k = 0; k < Config::popSize2; k++) {
@@ -591,15 +597,15 @@ int main() {
     }
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
-    pop2.merge(pop);
+    pop2.add(std::move(pop));
     
     /* Rank-trim down to popSize */
-    pop = Population(Config::popSize-1, 
-        [&]() -> const Candidate& {
-          const Candidate &c = pop2.rankSelect(Config::trimBias);
-          CandidateFactory::hit(c.getOrigin());
-          return c;
-        });
+    /* MP doesn't help, most of the work needs to be serialized anyway */
+    pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
+      const Candidate &c = pop2.rankSelect(Config::trimBias);
+      CandidateFactory::hit(c.getOrigin());
+      return c;
+    });
 
     /* Unconditionally add the best candidate */
     pop.add(pop2.best());
