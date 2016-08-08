@@ -268,8 +268,9 @@ class CandidateFactory {
     float total = std::accumulate(weights.begin(), weights.end(), 0);
     int sz = func.size();
     /* Find the longest GenOp name */
+    typedef decltype(func)::value_type cmp;
     auto max = std::max_element(func.begin(), func.end(),
-        [](const decltype(func)::value_type& v1, const decltype(func)::value_type& v2) {
+        [](const cmp& v1, const cmp& v2) {
           return v1.second.length() < v2.second.length();
         });
     auto maxw = max->second.length();
@@ -591,7 +592,7 @@ int main() {
 #pragma omp parallel for schedule(dynamic)
 #endif
     for(size_t k = 0; k < Config::popSize2; k++) {
-      Candidate c = cf.getNew();
+      Candidate c{cf.getNew()};
       c.fitness();  // skip lazy evaluation
       pop2.add(std::move(c));
     }
