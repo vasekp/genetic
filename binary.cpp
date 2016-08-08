@@ -205,9 +205,9 @@ struct pow3<0> {
 class CandidateFactory {
   typedef Candidate (CandidateFactory::*GenOp)();
 
-  static thread_local std::uniform_real_distribution<> dUni;
-  static thread_local std::uniform_int_distribution<unsigned> dTgt;
-  static thread_local std::uniform_int_distribution<unsigned> dCtrl;
+  std::uniform_real_distribution<> dUni{0, 1};
+  std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
+  std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
 
   static const std::vector<std::pair<GenOp, std::string>> func;
   static std::vector<unsigned> weights;
@@ -226,6 +226,9 @@ class CandidateFactory {
 
   static Candidate genInit() {
     const static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
+    static thread_local std::uniform_real_distribution<> dUni{0, 1};
+    static thread_local std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
+    static thread_local std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
     std::vector<Gene> gt;
     gt.reserve(Config::expLengthIni);
     do {
@@ -498,10 +501,6 @@ class CandidateFactory {
     return Candidate(std::move(gm));
   }
 };
-
-thread_local std::uniform_real_distribution<> CandidateFactory::dUni{0, 1};
-thread_local std::uniform_int_distribution<unsigned> CandidateFactory::dTgt{0, Config::nBit - 1};
-thread_local std::uniform_int_distribution<unsigned> CandidateFactory::dCtrl{0, pow3<Config::nBit-1>::value - 1};
 
 
 void Candidate::dump(std::ostream& os) const {
