@@ -164,19 +164,25 @@ class Population : private std::vector<Candidate> {
   }
 
   /** \brief Copies all candidates from a vector of `Candidate`s. */
-  void NOINLINE add(const std::vector<Candidate>& pop) {
+  void NOINLINE add(const std::vector<Candidate>& vec) {
+    add(vec.begin(), vec.end());
+  }
+
+  /** \brief Copies an iterator range from a container of `Candidate`s. */
+  template<class InputIt>
+  void add(InputIt first, InputIt last) {
     std::lock_guard<std::mutex> lock(mtx);
-    this->reserve(size() + pop.size());
-    this->insert(end(), pop.begin(), pop.end());
+    this->reserve(size() + std::distance(first, last));
+    this->insert(end(), first, last);
     sorted = false;
   }
 
   /** \brief Moves all candidates from a vector of `Candidate`s. */
-  void NOINLINE add(std::vector<Candidate>&& pop) {
+  void NOINLINE add(std::vector<Candidate>&& vec) {
     std::lock_guard<std::mutex> lock(mtx);
-    this->reserve(size() + pop.size());
-    this->insert(end(), std::make_move_iterator(pop.begin()), std::make_move_iterator(pop.end()));
-    pop.clear();
+    this->reserve(size() + vec.size());
+    this->insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
+    vec.clear();
     sorted = false;
   }
 
