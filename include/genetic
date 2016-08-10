@@ -1,0 +1,21 @@
+#ifndef GENETIC_H
+#define GENETIC_H
+
+#include <vector>
+#include <random>
+#include <algorithm>
+#include <type_traits>
+#include <mutex>
+
+#ifndef NOINLINE
+#define NOINLINE
+#endif
+
+#include "genetic_bits/internal.hpp"
+#include "genetic_bits/globals.hpp"
+#include "genetic_bits/ICandidate.hpp"
+#include "genetic_bits/Population.hpp"
+
+#endif
+
+// vim:syntax=cpp

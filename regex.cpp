@@ -3,7 +3,7 @@
 #include <regex>
 #include <fstream>
 
-#include "genetic.h"
+#include "genetic"
 
 namespace Context {
   std::vector<std::string> dbAccept;  /* strings to be accepted */

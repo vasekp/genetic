@@ -12,7 +12,7 @@
 #define NOINLINE
 #endif
 
-#include "genetic.h"
+#include "genetic"
 
 
 namespace Config {

@@ -1,5 +1,5 @@
 PROGS = regex binary
-HEADERS = genetic.h
+HEADERS = include/genetic include/genetic_bits/*.hpp
 
 # This allows to distinguish between binaries made for debug, profiling, etc.
 # The main purpose is that "make debug" doesn't think there's nothing to make 
@@ -17,6 +17,7 @@ profile: SFX = .p
 optprofile: SFX = .op
 
 # Common C++ flags
+CXXFLAGS += -Iinclude
 CXXFLAGS += -std=c++11
 CXXFLAGS += -pedantic -Wall -Wextra -Weffc++
 CXXFLAGS += -fno-diagnostics-show-caret -fopenmp
