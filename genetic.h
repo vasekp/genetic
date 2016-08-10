@@ -22,8 +22,8 @@ namespace gen {
  * Population::rankSelect(). */
 static thread_local std::minstd_rand rng{std::random_device()()};
 
-/* Helpers for Population::rankSelect<std::exp> */
 namespace internal {
+  /* Helpers for Population::rankSelect<std::exp> */
   template<double (*)(double)>
     struct is_exp: std::false_type { };
 
@@ -34,23 +34,53 @@ namespace internal {
   double eval_in_product(double x, double y) {
     return f(x * y);
   }
+
+  /* Helper for enabling functions dependent on total ordering */
+  template<typename C>
+  constexpr auto comparable(int) ->
+    typename std::enable_if<
+      std::is_convertible<decltype(std::declval<C>() < std::declval<C>()), bool>::value,
+    bool>::type { return true; }
+
+  template<typename C>
+  constexpr bool comparable(...) { return false; }
+  
+  /* Helpers for detecting if a Candidate is derived from ICandidate */
+  template<class T>
+  constexpr bool hasFT(typename T::_FitnessType*) { return true; }
+
+  template<class T>
+  constexpr bool hasFT(...) { return false; }
+
+  template<class T>
+  typename T::_FitnessType detectFT(T*);
+
+  template<class T>
+  void detectFT(...);
 }
+
+
 
 /** \brief The `Candidate` template.
  *
- * Needs a typename `Fitness` which can be a simple type or a class but needs
- * to implement zero-argument construction and `operator<()`.  The virtual
- * implementation only keeps track of whether fitness has been computed, and
- * provides the precomputed value when available. The inner function to
- * compute fitness when required, computeFitness(), needs to be provided in
- * specializations. */
+ * Takes a typename `Fitness` which can be a simple type or a class with a
+ * a default constructor and, optionally, `operator<`. If the latter is
+ * provided it is assumed that it defines a total ordering on the Fitness
+ * type.
+ *
+ * The virtual implementation only keeps track of whether fitness has
+ * been computed, and provides the precomputed value when available. The inner
+ * function to compute fitness when required, computeFitness(), needs to be
+ * provided in every derived class. Also, derived classes need to implement a
+ * default constructor (or provide default values for all arguments in some
+ * constructor) for the purposes of Population. */
 template<typename Fitness>
 class ICandidate {
   mutable Fitness _fitness{};
   mutable bool fitnessValid = false;
 
   public:
-  /** \brief The Fitness type provided for this template specialization. */
+  /** \brief The `Fitness` type provided for this template specialization. */
   typedef Fitness _FitnessType;
 
   /** \brief Returns this `Candidate`'s fitness, calculating it on request if not
@@ -63,8 +93,14 @@ class ICandidate {
     return _fitness;
   }
 
-  /** \brief Compares two `Candidate`s by the Fitness's `operator<`. */
-  friend bool operator< (const ICandidate<Fitness>& c1, const ICandidate<Fitness>& c2) {
+  /** \brief Compares two `Candidate`s by the Fitness's `operator<`.
+   *
+   * The `operator<` of `Fitness` is expected to be a total ordering for the
+   * purposes of sorting the Population by fitness. This method is not
+   * generated if `Fitness::operator<()` does not exist or does not return a
+   * boolean value. */
+  friend inline bool
+  operator< (const ICandidate<Fitness>& c1, const ICandidate<Fitness>& c2) {
     return c1.fitness() < c2.fitness();
   }
 
@@ -72,20 +108,30 @@ class ICandidate {
 
   protected:
   /** \brief The internal fitness computation, called the first time this
-   * `Candidate`'s fitness() is queried. Every specialization must implement
+   * `Candidate`'s fitness() is queried. Every derived class must implement
    * this routine. */
   virtual Fitness computeFitness() const = 0;
 }; // class ICandidate
 
 
+
 /** \brief The Population template.
  *
- * Requires a Candidate class which is expected to be derived from ICandidate
- * although no exposed properties except `operator<` are accessed. */
+ * Requires a Candidate class derived from ICandidate and implementing a
+ * default constructor. */
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
   std::mutex mtx{};
+
+  static_assert(std::is_default_constructible<Candidate>::value,
+      "The Candidate type needs to provide a default constructor.");
+
+  typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
+
+  static_assert(internal::hasFT<Candidate>(nullptr) &&
+      std::is_base_of<ICandidate<_FitnessType>, Candidate>::value,
+      "The Candidate type needs to be derived from ICandidate.");
 
   public:
   /** \brief Creates an empty population. */
@@ -213,6 +259,10 @@ class Population : private std::vector<Candidate> {
    * lookup.  The default value is `std::exp`, for which an equivalent fast
    * replacement algorithm is provided.
    *
+   * Applicable only if the fitness type of Candidate allows total ordering
+   * using `operator<`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied.
+   *
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
@@ -240,6 +290,10 @@ class Population : private std::vector<Candidate> {
    * and strictly increasing in its argument. This function will be built in
    * at compile time, eliminating a function pointer lookup. A usual choice
    * for `fun` is `std::pow`.
+   *
+   * Applicable only if the fitness type of Candidate allows total ordering
+   * using `operator<`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied.
    *
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
@@ -283,14 +337,22 @@ class Population : private std::vector<Candidate> {
   /** \brief Returns the best candidate of population.
    *
    * If more candidates have equal best fitness the returned reference may be
-   * any of them. */
+   * any of them.
+   *
+   * Applicable only if the fitness type of Candidate allows total ordering
+   * using `operator<`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied. */
   const Candidate& best() {
     ensureSorted();
     return this->front();
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
-   * dropping the worst part of the sample. */
+   * dropping the worst part of the sample.
+   *
+   * Applicable only if the fitness type of Candidate allows total ordering
+   * using `operator<`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied. */
   Population<Candidate>& trim(size_t newSize) {
     ensureSorted();
     std::lock_guard<std::mutex> lock(mtx);
@@ -309,16 +371,13 @@ class Population : private std::vector<Candidate> {
   /** \brief Returns the mean fitness of the population and the standard
    * deviation.
    *
-   * Conditional member (using SFINAE) for candidate classes whose fitness is
-   * a simple floating point type or allows an implicit convertion to one. The
-   * method does not appear in specializations for which this condition is not
-   * satisfied. */
-#ifdef DOXYGEN
+   * Applicable only to candidate classes whose fitness is a simple floating
+   * point type or allows an implicit convertion to one. This method
+   * generates an error at compile time in specializations for which this
+   * condition is not satisfied. */
   Stat stat() {
-#else
-  template<typename FT = typename Candidate::_FitnessType>
-  auto stat() -> typename std::enable_if<std::is_convertible<FT, double>::value, Stat>::type {
-#endif
+    static_assert(std::is_convertible<_FitnessType, double>::value,
+        "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
     for(Candidate &c : *this) {
       f = c.fitness();
@@ -331,7 +390,9 @@ class Population : private std::vector<Candidate> {
   }
 
   private:
-  inline void ensureSorted() {
+  void ensureSorted() {
+    static_assert(internal::comparable<_FitnessType>(0),
+        "This method requires the fitness type to implement an operator<.");
     std::lock_guard<std::mutex> lock(mtx);
     if(!sorted) {
       std::sort(begin(), end());
