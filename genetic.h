@@ -65,7 +65,7 @@ namespace internal {
  *
  * Takes a typename `Fitness` which can be a simple type or a class with a
  * a default constructor and, optionally, `operator<`. If the latter is
- * provided it is assumed that it defines a total ordering on the Fitness
+ * provided it is assumed that it defines a total ordering on the `Fitness`
  * type.
  *
  * The virtual implementation only keeps track of whether fitness has
@@ -117,7 +117,7 @@ class ICandidate {
 
 /** \brief The Population template.
  *
- * Requires a Candidate class derived from ICandidate and implementing a
+ * Requires a `Candidate` class derived from ICandidate and implementing a
  * default constructor. */
 template<class Candidate>
 class Population : private std::vector<Candidate> {
@@ -144,8 +144,9 @@ class Population : private std::vector<Candidate> {
   }
 
   /** \brief Creates a population of size `count` whose candidates are results
-   * of calls to the source function `src`. For discussion about the latter
-   * parameter see add(size_t, Source).
+   * of calls to the source function `src`.
+   *
+   * For discussion about the latter parameter see add(size_t, Source).
    *
    * \see add(size_t, Source) */
   template<class Source>
@@ -195,8 +196,9 @@ class Population : private std::vector<Candidate> {
   /** \brief Draws `count` candidates from a source function `src`.
    *
    * Source can be:
-   * - `std::function<Candidate>`: returning by copy,
-   * - `std::function<const Candidate&>`: returning by reference,
+   * - `std::function<(const) Candidate>`: returning by copy,
+   * - `std::function<(const) Candidate&>`: returning by reference,
+   * - a pointer to function returning `Candidate` or `Candidate&`,
    * - a lambda function returning either.
    *
    * The template allows for optimizations (inlining) in the latter case. */
@@ -250,7 +252,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
-   * This function accepts as a template parameter a name of a function
+   * This method accepts as a template parameter a name of a function
    * `double(double)` that will receive arguments linearly spaced between
    * `1/size * bias` and `bias` for candidates ranked `1` through `size` and
    * its return value will be interpreted as inverse probability, and as such,
@@ -259,7 +261,7 @@ class Population : private std::vector<Candidate> {
    * lookup.  The default value is `std::exp`, for which an equivalent fast
    * replacement algorithm is provided.
    *
-   * Applicable only if the fitness type of Candidate allows total ordering
+   * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
    *
@@ -282,7 +284,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
-   * This function accepts as a template parameter a name of a function
+   * This method accepts as a template parameter a name of a function
    * `double(double, double)` that will receive its first argument linearly
    * spaced between `1/size` and `1` for candidates ranked `1` through `size`
    * and second argument equal to `bias` and its return value will be
@@ -291,7 +293,7 @@ class Population : private std::vector<Candidate> {
    * at compile time, eliminating a function pointer lookup. A usual choice
    * for `fun` is `std::pow`.
    *
-   * Applicable only if the fitness type of Candidate allows total ordering
+   * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
    *
@@ -339,7 +341,7 @@ class Population : private std::vector<Candidate> {
    * If more candidates have equal best fitness the returned reference may be
    * any of them.
    *
-   * Applicable only if the fitness type of Candidate allows total ordering
+   * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
@@ -350,7 +352,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample.
    *
-   * Applicable only if the fitness type of Candidate allows total ordering
+   * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   Population<Candidate>& trim(size_t newSize) {
