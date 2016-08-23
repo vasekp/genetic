@@ -320,9 +320,13 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
-    std::lock_guard<mutex_t> lock(mtx);
-    ensureSorted();
-    return std::vector<Candidate>::front();
+    static_assert(internal::comparable<_FitnessType>(0),
+        "This method requires the fitness type to implement an operator<.");
+    std::shared_lock<mutex_t> lock(mtx);
+    if(sorted)
+      return std::vector<Candidate>::front();
+    else
+      return *std::min_element(begin(), end());
   }
 
   /** \brief Returns the number of candidates in this population dominated by
