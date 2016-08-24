@@ -17,7 +17,7 @@ profile: SFX = .p
 optprofile: SFX = .op
 
 # Common C++ flags
-CXXFLAGS += -std=c++11
+CXXFLAGS += -std=c++11 -march=native
 CXXFLAGS += -pedantic -Wall -Wextra -Weffc++
 CXXFLAGS += -fno-diagnostics-show-caret -fopenmp
 
