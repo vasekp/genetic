@@ -30,11 +30,13 @@ namespace Config {
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pDeleteUniform = 0.10;  // probability of single gate deletion 
 
-  const float pIn = 10;               // penalty for leaving input register modified (= error)
-  const float pLength = 1/10000.0;    // penalty for number of gates
-  const float pControl = 1/3000.0;    // penalty for control (quadratic in number of C-ing bits)
+  const float pnIn = 10;              // penalty for leaving input register modified (= error)
+  const float pnLength = 1/10000.0;   // penalty for number of gates
+  const float pnControl = 1/3000.0;   // penalty for control (quadratic in number of C-ing bits)
 
   const float heurFactor = 0.15;      // how much prior success of genetic ops should influence future choices
+
+  const float pControl = 0.25;        // how much each bit is likely to be a control bit at gate creation
 
   const int bIn = 5;
   const int cIn = 1;
@@ -69,20 +71,25 @@ namespace Colours {
 class Gene {
   unsigned tgt;     // target qubit
   unsigned ctrl;    // bitmask of control bits: 0 through 2^nBit - 1 with zero at tgt bit
-  unsigned ctrlEnc; // 0 through 3^(nBit-1) - 1
+  unsigned ctrlEnc; // 0 through UINT_MAX
   uint32_t hw;      // Hamming weight of ctrl
 
   public:
   NOINLINE Gene(unsigned _target, unsigned _control): tgt(_target), ctrl(0), ctrlEnc(_control), hw(0) {
-    /* Convert from base 3 to base 2: 0,1 become 0; 2 becomes 1. This way 1 is
-     * twice less likely than 0 at any position if the original distribution
-     * was uniform. Thus plain NOTs and C-NOTs will be generated more often
-     * than CC-NOTs and higher.
-     * The conversion also reverses the order of digits which is unimportant. */
-    for(int i = 0; i < Config::nBit-1; i++) {
+    double c = (double)_control / std::numeric_limits<unsigned>::max();
+    /* Convert an unsigned between 0 and UINT_MAX to a bit string where the
+     * probability of 1 in each position is given by Config::pControl. A value
+     * less than 0.5 means that plain NOTs and C-NOTs will be generated more
+     * often than CC-NOTs and higher. */
+    for(int i = 0; i < Config::nBit - 1; i++) {
       ctrl <<= 1;
-      if(_control % 3 == 2) ctrl |= 1, hw++;
-      _control /= 3;
+      if(c < Config::pControl) {
+        ctrl |= 1;
+        hw++;
+        c /= Config::pControl;
+      } else {
+        c = (c - Config::pControl)/(1 - Config::pControl);
+      }
     }
     /* At this point ctrl has nBit-1 bits. We use this to guarantee that
      * 1<<tgt is left unoccupied. */
@@ -173,12 +180,12 @@ class Candidate: public gen::ICandidate<float> {
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
       mism += hamming(work ^ cmp);
-      mism += (Config::pIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
+      mism += (Config::pnIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
     }
-    float penalty = gt.size()*Config::pLength;
+    float penalty = gt.size()*Config::pnLength;
     for(const Gene& g : gt) {
       unsigned h = g.weight();
-      penalty += h*h*Config::pControl;
+      penalty += h*h*Config::pnControl;
     }
     count++;
     return mism + penalty;
@@ -196,24 +203,12 @@ class Candidate: public gen::ICandidate<float> {
 typedef gen::Population<Candidate> Population;
 
 
-/* Static calculation of integral pow(3, n) */
-template<int N>
-struct pow3 {
-    static const unsigned value = 3*pow3<N-1>::value;
-};
-
-template<>
-struct pow3<0> {
-    static const unsigned value = 1;
-};
-
-
 class CandidateFactory {
   typedef Candidate (CandidateFactory::*GenOp)();
 
   std::uniform_real_distribution<> dUni{0, 1};
   std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
-  std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
+  std::uniform_int_distribution<unsigned> dCtrl{};
 
   static const std::vector<std::pair<GenOp, std::string>> func;
   static std::vector<unsigned> weights;
@@ -234,7 +229,7 @@ class CandidateFactory {
     const static double probTerm = 1/Config::expLengthIni;  // probability of termination; expLength = expected number of genes
     static thread_local std::uniform_real_distribution<> dUni{0, 1};
     static thread_local std::uniform_int_distribution<unsigned> dTgt{0, Config::nBit - 1};
-    static thread_local std::uniform_int_distribution<unsigned> dCtrl{0, pow3<Config::nBit-1>::value - 1};
+    static thread_local std::uniform_int_distribution<unsigned> dCtrl{};
     std::vector<Gene> gt;
     gt.reserve(Config::expLengthIni);
     do {
