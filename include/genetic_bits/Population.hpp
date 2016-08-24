@@ -134,6 +134,7 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::size;
   using std::vector<Candidate>::clear;
   using std::vector<Candidate>::operator[];
+  using std::vector<Candidate>::erase; // TODO temporary
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
@@ -165,6 +166,13 @@ class Population : private std::vector<Candidate> {
       return rankSelect<
         static_cast<double(*)(double, double)>(&internal::eval_in_product<fun>)
         > (bias);
+  }
+
+  /** \brief Retrieves a candidate chosen using uniform random selection. */
+  template<class Rng = decltype(rng)>
+  const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
+    std::uniform_int_distribution<size_t> dist{0, size() - 1};
+    return (*this)[dist(rng)];
   }
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
@@ -231,7 +239,7 @@ class Population : private std::vector<Candidate> {
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
     ensureSorted();
-    return this->front();
+    return std::vector<Candidate>::front();
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -240,12 +248,51 @@ class Population : private std::vector<Candidate> {
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
-  Population<Candidate>& trim(size_t newSize) {
+  void trim(size_t newSize) {
     ensureSorted();
     std::lock_guard<std::mutex> lock(mtx);
     if(size() > newSize)
       this->resize(newSize);
-    return *this;
+  }
+
+  /** \brief Reduces the population to a maximum size given by the argument,
+   * using random selection if the latter is smaller. */
+  template<class Rng = decltype(rng)>
+  void randomTrim(size_t newSize, Rng& rng = rng) {
+    std::lock_guard<std::mutex> lock(mtx);
+    if(size() > newSize) {
+      std::shuffle(begin(), end(), rng);
+      this->resize(newSize);
+    }
+  }
+
+  /** \brief Returns the number of `Candidate`s in this population dominated by
+   * a given `Candidate`. */
+  friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
+    size_t cnt = 0;
+    for(auto& cmp : pop)
+      if(c << cmp)
+        cnt++;
+    return cnt;
+  }
+
+  /** \brief Returns the number of `Candidate`s in this population that
+   * dominate a given `Candidate`. */
+  friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
+    size_t cnt = 0;
+    for(auto& cmp : pop)
+      if(cmp << c)
+        cnt++;
+    return cnt;
+  }
+
+  /** \brief Returns a nondominated subset of this population. */
+  Population<Candidate> front() {
+    Population<Candidate> ret{};
+    for(auto& c : *this)
+      if(*this << c == 0)
+        ret.add(c);
+    return ret;
   }
 
 

@@ -43,6 +43,17 @@ class ICandidate {
     return c1.fitness() < c2.fitness();
   }
 
+  /** \brief Compares two `Candidate`s by the Fitness's `operator<<`.
+   *
+   * The `operator<<` of `Fitness` is expected to be a partial ordering
+   * denoting dominance in multiobjective searches. This method is not
+   * generated if `Fitness::operator<<()` does not exist or does not return a
+   * boolean value. */
+  friend inline bool
+  operator<< (const ICandidate<Fitness>& c1, const ICandidate<Fitness>& c2) {
+    return c1.fitness() << c2.fitness();
+  }
+
   virtual ~ICandidate() { }
 
   protected:

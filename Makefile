@@ -1,4 +1,4 @@
-PROGS = regex binary
+PROGS = regex binary binary-mo
 HEADERS = include/genetic include/genetic_bits/*.hpp
 
 # This allows to distinguish between binaries made for debug, profiling, etc.

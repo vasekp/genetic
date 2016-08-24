@@ -24,6 +24,16 @@ namespace internal {
 
   template<typename C>
   constexpr bool comparable(...) { return false; }
+
+  /* Helper for enabling functions dependent on dominance */
+  template<typename C>
+  constexpr auto dominable(int) ->
+    typename std::enable_if<
+      std::is_convertible<decltype(std::declval<C>() << std::declval<C>()), bool>::value,
+    bool>::type { return true; }
+
+  template<typename C>
+  constexpr bool dominable(...) { return false; }
   
   /* Helpers for detecting if a Candidate is derived from ICandidate */
   template<class T>

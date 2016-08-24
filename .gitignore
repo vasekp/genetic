@@ -1,6 +1,8 @@
 # output files
 regex
 binary
+binary-mo
+test*
 *.vys
 *.d
 *.b
