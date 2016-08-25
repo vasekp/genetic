@@ -648,28 +648,29 @@ int main() {
   std::chrono::duration<double> dur = post - pre;
   std::cout << std::endl <<
     "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
-    Candidate::totalCount() << " candidates tested, ";
+    Candidate::totalCount() << " candidates tested" << std::endl;
 
   /* List the best-of-run candidate */
-  Population nondom = pop.front();
+  /*Population nondom = pop.front();
   std::cout << nondom.size() << " nondominated";
   if(nondom.size() > 0) {
     const Candidate& e = nondom.randomSelect();
     std::cout << ", e.g. " << e.fitness() << ' ' << e << std::endl;;
     e.dump(std::cout);
   } else
-    std::cout << std::endl;
+    std::cout << std::endl;*/
 
   /* Dump the heuristic distribution */
   std::cout << std::endl << "Genetic operator distribution:" << std::endl;
   CandidateFactory::dumpWeights(std::cout);
 
   /* Delete candidates with duplicate fitnesses */
-  std::cout << nondom.size();
+  Population nondom = pop.front();
+  std::cout << std::endl << nondom.size() << " nondominated candidates, ";
   nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
       return a.fitness() == b.fitness();
     });
-  std::cout << " → " << nondom.size() << std::endl;
+  std::cout << nondom.size() << " unique fitnesses:" << std::endl;
   for(auto& c : nondom)
-  std::cout << c.fitness() << ' ' << c << std::endl;
+    std::cout << c.fitness() << ' ' << c << std::endl;
 }
