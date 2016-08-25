@@ -1,7 +1,7 @@
 # Introduction
 
 This is a simple genetic algorithm framework written in C++14 and intending to 
-be generic, thread-safe and simple to use. The encoding, and indeed any 
+be generic, parallelized, and simple to use. The encoding, and indeed any 
 internal structure of the candidate and fitness, are completely up to the 
 particular implementation. Both single- and multi-objective searches are 
 supported.
@@ -100,10 +100,6 @@ The function to be compared with can be entered by hardcoding, along with the
 number of input register sections, bit width of one section, and number of 
 output qubits. Historically also number of ancilla bits can be specified but 
 experience has shown they are not necessary.
-
-This program is more involved than the previous example, featuring parallel 
-candidate generation, code optimization where appropriate, fast random number 
-generation, and nicer output. However the underlying library is shared.
 
 ## Example solutions
 
