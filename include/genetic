@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <shared_mutex>
+#include <omp.h>
 
 #ifndef NOINLINE
 #define NOINLINE

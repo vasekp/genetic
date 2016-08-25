@@ -38,12 +38,12 @@ class Population : private std::vector<Candidate> {
   /** \brief Creates a population of size `count` whose candidates are results
    * of calls to the source function `src`.
    *
-   * For discussion about the latter parameter see add(size_t, Source).
+   * For discussion about the parameters see add(size_t, Source, bool, bool).
    *
-   * \see add(size_t, Source) */
+   * \see add(size_t, Source, bool, bool) */
   template<class Source>
-  Population(size_t count, Source src) {
-    add(count, src);
+  Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
+    add(count, src, precompute, parallel);
   }
 
   /* The Big Four: trivial but we need them because the mutex can't be 
@@ -87,19 +87,34 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Draws `count` candidates from a source function `src`.
    *
-   * Source can be:
+   * \param count the number of candidates to generate
+   * \param src source function; one of:
    * - `std::function<(const) Candidate>`: returning by copy,
    * - `std::function<(const) Candidate&>`: returning by reference,
    * - a pointer to function returning `Candidate` or `Candidate&`,
    * - a lambda function returning either.
-   *
-   * The template allows for optimizations (inlining) in the latter case. */
+   * The template allows for optimizations (inlining) in the latter case.
+   * \param precompute set to `true` to enable precomputing the candidates'
+   * fitness (the evaluation is lazy by default)
+   * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
-  void NOINLINE add(size_t count, Source src) {
+  void NOINLINE add(size_t count, Source src, bool precompute = false, bool parallel = true) {
     std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + count);
-    for(size_t j = 0; j < count; j++)
-      this->push_back(src());
+    #pragma omp parallel if(parallel)
+    {
+      std::vector<Candidate> tmp{};
+      tmp.reserve(count*2/omp_get_num_threads());
+      #pragma omp for schedule(dynamic)
+      for(size_t j = 0; j < count; j++) {
+        Candidate c{src()};
+        if(precompute)
+          c.fitness();
+        tmp.push_back(c);
+      }
+      #pragma omp critical
+      this->insert(end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
+    }
     sorted = false;
   }
 
@@ -290,7 +305,7 @@ class Population : private std::vector<Candidate> {
   public:
   /** \brief Retrieves a candidate chosen using uniform random selection. */
   template<class Rng = decltype(rng)>
-  const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
+  const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
     std::shared_lock<mutex_t> lock(mtx);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
@@ -332,13 +347,17 @@ class Population : private std::vector<Candidate> {
     return cnt;
   }
 
-  /** \brief Returns a nondominated subset of this population. */
-  Population<Candidate> front() {
+  /** \brief Returns a nondominated subset of this population.
+   *
+   * \param parallel controls parallelization using OpenMP (on by default) */
+  Population<Candidate> front(bool parallel = true) const {
     Population<Candidate> ret{};
     std::shared_lock<mutex_t> lock(mtx);
-    for(auto& c : *this)
-      if(*this << c == 0)
-        ret.add(c);
+    size_t sz = size();
+#pragma omp parallel for if(parallel)
+    for(size_t i = 0; i < sz; i++)
+      if(*this << (*this)[i] == 0)
+        ret.add((*this)[i]);
     return ret;
   }
 
@@ -359,12 +378,12 @@ class Population : private std::vector<Candidate> {
    *
    * \see Stat
    */
-  Stat stat() {
+  Stat stat() const {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
     std::shared_lock<mutex_t> lock(mtx);
-    for(Candidate &c : *this) {
+    for(const Candidate &c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;

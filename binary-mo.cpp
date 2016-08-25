@@ -5,8 +5,9 @@
 #include <chrono>
 #include <atomic>
 #include <iomanip>
+#include <omp.h>
 
-#ifdef BENCH
+#ifdef DEBUG
 #define NOINLINE __attribute__((noinline))
 #else
 #define NOINLINE
@@ -18,7 +19,7 @@
 namespace Config {
   const size_t popSize = 100;
   const size_t popSize2 = 2000;
-#ifdef BENCH
+#ifdef DEBUG
   const int nGen = 100;
 #else
   const int nGen = 500;
@@ -166,9 +167,8 @@ class Candidate: public gen::Candidate<Fitness> {
     return os;
   }
 
-  Candidate& setOrigin(int _origin) {
+  void setOrigin(int _origin) {
     origin = _origin;
-    return *this;
   }
 
   int getOrigin() const {
@@ -255,7 +255,9 @@ class CandidateFactory {
 
   Candidate NOINLINE getNew() {
     int index = dFun(gen::rng);
-    return (this->*func[index].first)().setOrigin(index);
+    Candidate c = (this->*func[index].first)();
+    c.setOrigin(index);
+    return c;
   }
 
   static void hit(int ix) {
@@ -584,6 +586,7 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
 int main() {
 #ifdef BENCH
   gen::rng.seed(1);
+  omp_set_num_threads(1);
 #endif
   Colours::use = isatty(1);
 
@@ -607,30 +610,16 @@ int main() {
     for(auto& c : nondom)
       CandidateFactory::hit(c.getOrigin());
 
-    /* Top up to popSize2 candidates */
+    /* Top up to popSize2 candidates, precomputing fitnesses */
     Population pop2(Config::popSize2);
     CandidateFactory cf{pop};
-
-#ifndef SINGLE
-#pragma omp parallel for schedule(dynamic)
-#endif
-    for(size_t k = 0; k < Config::popSize2 - nd; k++) {
-      Candidate c{cf.getNew()};
-      c.fitness();  // skip lazy evaluation
-      pop2.add(std::move(c));
-    }
+    pop2.add(Config::popSize2 - nd, [&]() -> const Candidate { return cf.getNew(); }, true);
 
     /* Merge the nondominated subset of the previous population */
     pop2.add(std::move(nondom));
     pop = std::move(pop2);
 
     /* Summarize */
-    /*const Candidate &best = pop.best();
-    Population::Stat stat = pop.stat();
-    std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
-      "fitness " << stat.mean << " ± " << stat.stdev << ", "
-      "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
-      ": " << best << std::endl;*/
     nondom = pop.front();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       nondom.size() << " nondominated";

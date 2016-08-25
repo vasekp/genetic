@@ -179,7 +179,7 @@ int main() {
             return Candidate::crossover(pop.rankSelect(Config::selectBias), pop.rankSelect(Config::selectBias));
           else
             return Candidate::mutate(pop.rankSelect(Config::selectBias));
-        });
+        }, true);
 
       /* Merge with parents */
       pop.add(std::move(children));
