@@ -135,7 +135,6 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::size;
   using std::vector<Candidate>::clear;
   using std::vector<Candidate>::operator[];
-  using std::vector<Candidate>::erase; // TODO temporary
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
@@ -270,6 +269,38 @@ class Population : private std::vector<Candidate> {
     std::lock_guard<mutex_t> lock(mtx);
     std::shuffle(begin(), end(), rng);
     this->resize(newSize);
+  }
+
+  /** \brief Reduces the population by selective removal of candidates.
+   * 
+   * Candidates are tested for similarity according to a provided crierion
+   * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
+   * is kept. A minimum number of candidates can be set; if so, the procedure
+   * stops when enough candidates have been removed to satisfy this bound.
+   *
+   * \param test a boolean function accepting two `const Candidate`
+   * references. Should be symmetric in its arguments. If the return value is
+   * `true` the latter candidate is removed from the population.
+   * \param minSize a minimum number of candidates to be kept if possible. If
+   * zero (the default value), all duplicates are removed.
+   * \param randomize whether to randomly shuffle the sample prior to pruning
+   * (this is the default). If `false` then earlier appearing candidates are
+   * preferred in survival.
+   */
+  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true) {
+    if(size() <= minSize)
+      return;
+    std::lock_guard<mutex_t> lock(mtx);
+    if(randomize)
+      std::shuffle(begin(), end(), rng);
+    size_t sz = size();
+    for(size_t i = 0; i < sz - 1; i++)
+      for(size_t j = sz - 1; j > i; j--)
+        if(test((*this)[i], (*this)[j])) {
+          this->erase(begin() + j);
+          if(--sz <= minSize)
+            return;
+        }
   }
 
   /** \brief Returns the number of `Candidate`s in this population dominated by

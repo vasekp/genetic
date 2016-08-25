@@ -597,15 +597,11 @@ int main() {
     /* Find the nondominated subset and trim down do popSize */
     Population nondom = pop.front();
     //std::cout << nondom.size();
-    int crop = nondom.size() - Config::popSize;
-    for(size_t i = 0; i < nondom.size() - 1; i++)
-      for(size_t j = nondom.size() - 1; j > i; j--)
-        if(crop <= 0)
-          break;
-        else if(nondom[j].fitness() == nondom[i].fitness())
-          nondom.erase(nondom.begin() + j), --crop;
+    nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
+        return a.fitness() == b.fitness();
+      }, Config::popSize);
+    nondom.randomTrim(Config::popSize);
     //std::cout << " → " << nondom.size() << std::endl;
-    //nondom.randomTrim(Config::popSize);
     size_t nd = nondom.size();
 
     for(auto& c : nondom)
@@ -670,10 +666,9 @@ int main() {
 
   /* Delete candidates with duplicate fitnesses */
   std::cout << nondom.size();
-  for(size_t i = 0; i < nondom.size() - 1; i++)
-    for(size_t j = nondom.size() - 1; j > i; j--)
-      if(nondom[j].fitness() == nondom[i].fitness())
-        nondom.erase(nondom.begin() + j);
+  nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
+      return a.fitness() == b.fitness();
+    });
   std::cout << " → " << nondom.size() << std::endl;
   for(auto& c : nondom)
   std::cout << c.fitness() << ' ' << c << std::endl;
