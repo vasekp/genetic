@@ -35,7 +35,7 @@ namespace internal {
   template<typename C>
   constexpr bool dominable(...) { return false; }
   
-  /* Helpers for detecting if a Candidate is derived from ICandidate */
+  /* Helpers for detecting if a Candidate is derived from gen::Candidate */
   template<class T>
   constexpr bool hasFT(typename T::_FitnessType*) { return true; }
 

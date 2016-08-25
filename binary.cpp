@@ -132,7 +132,7 @@ class Gene {
 };
 
 
-class Candidate: public gen::ICandidate<float> {
+class Candidate: public gen::Candidate<float> {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
@@ -595,7 +595,7 @@ int main() {
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.add(std::move(pop));
     
-    /* Rank-trim down to popSize */
+    /* Trim down to popSize using rankSelect */
     /* MP doesn't help, most of the work needs to be serialized anyway */
     pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
       const Candidate &c = pop2.rankSelect(Config::trimBias);

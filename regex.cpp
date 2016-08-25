@@ -57,7 +57,7 @@ size_t Fitness::tAccept;
 size_t Fitness::tReject;
 
 
-class Candidate: public gen::ICandidate<Fitness> {
+class Candidate: public gen::Candidate<Fitness> {
   std::string reS{};  /* The string representation of this regex */
   std::regex re{};    /* The internal representation */
   bool valid = false;
@@ -186,7 +186,7 @@ int main() {
     }
 
     /* Trim to popSize */
-    pop.trim(Config::popSize);
+    pop.rankTrim(Config::popSize);
 
     /* Report summary */
     int cnt = 0;

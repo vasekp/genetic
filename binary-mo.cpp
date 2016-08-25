@@ -16,7 +16,7 @@
 
 
 namespace Config {
-  const size_t popSize = 500;
+  const size_t popSize = 100;
   const size_t popSize2 = 2000;
 #ifdef BENCH
   const int nGen = 100;
@@ -146,7 +146,7 @@ struct Fitness {
 };
 
 
-class Candidate: public gen::ICandidate<Fitness> {
+class Candidate: public gen::Candidate<Fitness> {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;

@@ -1,18 +1,15 @@
 # Introduction
 
-This is a simple genetic algorithm framework written in C++11 and intending to 
+This is a simple genetic algorithm framework written in C++14 and intending to 
 be generic, thread-safe and simple to use. The encoding, and indeed any 
 internal structure of the candidate and fitness, are completely up to the 
-particular implementation. At the moment a total ordering of candidates must 
-be available, however, limiting the use to single-objective optimization 
-schemes.
+particular implementation. Both single- and multi-objective searches are 
+supported.
 
-The header currently declares a virtual ICandidate class template, meant to be 
-specialized and derived from, and a Population class template supporting 
+The header currently declares a virtual `Candidate` class template, meant to be 
+specialized and derived from, and a `Population` class template supporting 
 adding candidates one by one or using a generating function, merging 
-populations, some statistics and more. An algorithm is provided for rank-based 
-selection with tunable exponential decay of selection probability in rank but 
-other selection methods can be provided.
+populations, several methods of selection, some statistics, and more.
 
 Two examples are provided: a regular expression-based string classifier and 
 an approximate reversible binary quantum circuit search.
