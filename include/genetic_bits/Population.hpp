@@ -141,7 +141,10 @@ class Population : private std::vector<Candidate> {
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
-   * specializations for which this condition is not satisfied. */
+   * specializations for which this condition is not satisfied.
+   *
+   * \param newSize the maximum desired size of the population. If this bound
+   * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
     if(size() <= newSize)
       return;
@@ -151,13 +154,17 @@ class Population : private std::vector<Candidate> {
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
-   * using random selection if the latter is smaller. */
+   * using random selection if the latter is smaller.
+   *
+   * \param newSize the maximum desired size of the population. If this bound
+   * is satisfied, the population is unchanged.
+   * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
     if(size() <= newSize)
       return;
     std::lock_guard<mutex_t> lock(mtx);
-    std::shuffle(begin(), end(), rng);
+    shuffle(rng);
     this->resize(newSize);
   }
 
@@ -175,13 +182,15 @@ class Population : private std::vector<Candidate> {
    * zero (the default value), all duplicates are removed.
    * \param randomize whether to randomly shuffle the sample prior to pruning
    * (this is the default). If `false` then earlier appearing candidates are
-   * preferred in survival.  */
-  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true) {
+   * preferred in survival.
+   * \param rng the random number generator, or gen::rng by default. */
+  template<class Rng = decltype(rng)>
+  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     if(size() <= minSize)
       return;
     std::lock_guard<mutex_t> lock(mtx);
     if(randomize)
-      std::shuffle(begin(), end(), rng);
+      shuffle(rng);
     size_t sz = size();
     for(size_t i = 0; i < sz - 1; i++)
       for(size_t j = sz - 1; j > i; j--)
@@ -373,6 +382,12 @@ class Population : private std::vector<Candidate> {
       std::sort(begin(), end());
       sorted = true;
     }
+  }
+
+  template<class Rng = decltype(rng)>
+  void shuffle(Rng& rng) {
+    std::shuffle(begin(), end(), rng);
+    sorted = false;
   }
 }; // class Population
 
