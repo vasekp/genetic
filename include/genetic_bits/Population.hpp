@@ -7,7 +7,8 @@ namespace gen {
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
-  mutable std::mutex mtx{};
+  typedef std::shared_timed_mutex mutex_t;
+  mutable mutex_t mtx{};
 
   static_assert(std::is_default_constructible<Candidate>::value,
       "The Candidate type needs to provide a default constructor.");
@@ -50,7 +51,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     std::vector<Candidate>::operator=(_p);
     sorted = _p.sorted;
     return *this;
@@ -58,7 +59,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Move assignment operator. */
   Population& operator=(Population&& _p) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     std::vector<Candidate>::operator=(std::move(_p));
     sorted = _p.sorted;
     return *this;
@@ -66,14 +67,14 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Adds a new candidate. */
   void add(const Candidate& c) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->push_back(c);
     sorted = false;
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->push_back(std::forward<Candidate>(c));
     sorted = false;
   }
@@ -89,7 +90,7 @@ class Population : private std::vector<Candidate> {
    * The template allows for optimizations (inlining) in the latter case. */
   template<class Source>
   void NOINLINE add(size_t count, Source src) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
       this->push_back(src());
@@ -104,7 +105,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Copies an iterator range from a container of `Candidate`s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + std::distance(first, last));
     this->insert(end(), first, last);
     sorted = false;
@@ -112,7 +113,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Moves all candidates from a vector of `Candidate`s. */
   void NOINLINE add(std::vector<Candidate>&& vec) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + vec.size());
     this->insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
     vec.clear();
@@ -171,7 +172,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Retrieves a candidate chosen using uniform random selection. */
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<mutex_t> lock(mtx);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
   }
@@ -203,7 +204,7 @@ class Population : private std::vector<Candidate> {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     size_t sz = size();
     if(sz != last_sz) {
       probs.clear();
@@ -222,7 +223,7 @@ class Population : private std::vector<Candidate> {
   const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
     double x = rDist(rng);
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     ensureSorted();
     if(x == 1)
       return this->back();
@@ -241,7 +242,7 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     ensureSorted();
     return std::vector<Candidate>::front();
   }
@@ -255,7 +256,7 @@ class Population : private std::vector<Candidate> {
   void trim(size_t newSize) {
     if(size() <= newSize)
       return;
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     ensureSorted();
     this->resize(newSize);
   }
@@ -266,7 +267,7 @@ class Population : private std::vector<Candidate> {
   void randomTrim(size_t newSize, Rng& rng = rng) {
     if(size() <= newSize)
       return;
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     std::shuffle(begin(), end(), rng);
     this->resize(newSize);
   }
@@ -275,7 +276,7 @@ class Population : private std::vector<Candidate> {
    * a given `Candidate`. */
   friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
     size_t cnt = 0;
-    std::lock_guard<std::mutex> lock(pop.mtx);
+    std::shared_lock<mutex_t> lock(pop.mtx);
     for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
@@ -286,7 +287,7 @@ class Population : private std::vector<Candidate> {
    * dominate a given `Candidate`. */
   friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
     size_t cnt = 0;
-    std::lock_guard<std::mutex> lock(pop.mtx);
+    std::shared_lock<mutex_t> lock(pop.mtx);
     for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
@@ -296,7 +297,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Returns a nondominated subset of this population. */
   Population<Candidate> front() {
     Population<Candidate> ret{};
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<mutex_t> lock(mtx);
     for(auto& c : *this)
       if(*this << c == 0)
         ret.add(c);
@@ -321,7 +322,7 @@ class Population : private std::vector<Candidate> {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<mutex_t> lock(mtx);
     for(Candidate &c : *this) {
       f = c.fitness();
       sf += f;
