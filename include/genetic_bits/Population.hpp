@@ -121,7 +121,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Copies all candidates from another Population. */
   void add(const Population<Candidate>& pop) {
-    return merge(static_cast<const std::vector<Candidate>&>(pop));
+    return add(static_cast<const std::vector<Candidate>&>(pop));
   }
 
   /** \brief Moves all candidates from another Population. */
