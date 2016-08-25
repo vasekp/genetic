@@ -7,7 +7,7 @@ namespace gen {
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
-  std::mutex mtx{};
+  mutable std::mutex mtx{};
 
   static_assert(std::is_default_constructible<Candidate>::value,
       "The Candidate type needs to provide a default constructor.");
@@ -171,6 +171,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Retrieves a candidate chosen using uniform random selection. */
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
+    std::lock_guard<std::mutex> lock(mtx);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
   }
@@ -202,6 +203,7 @@ class Population : private std::vector<Candidate> {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
+    std::lock_guard<std::mutex> lock(mtx);
     size_t sz = size();
     if(sz != last_sz) {
       probs.clear();
@@ -219,8 +221,9 @@ class Population : private std::vector<Candidate> {
   template<class Rng>
   const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
-    ensureSorted();
     double x = rDist(rng);
+    std::lock_guard<std::mutex> lock(mtx);
+    ensureSorted();
     if(x == 1)
       return this->back();
     else
@@ -238,6 +241,7 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
+    std::lock_guard<std::mutex> lock(mtx);
     ensureSorted();
     return std::vector<Candidate>::front();
   }
@@ -249,27 +253,29 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   void trim(size_t newSize) {
-    ensureSorted();
+    if(size() <= newSize)
+      return;
     std::lock_guard<std::mutex> lock(mtx);
-    if(size() > newSize)
-      this->resize(newSize);
+    ensureSorted();
+    this->resize(newSize);
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
    * using random selection if the latter is smaller. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
+    if(size() <= newSize)
+      return;
     std::lock_guard<std::mutex> lock(mtx);
-    if(size() > newSize) {
-      std::shuffle(begin(), end(), rng);
-      this->resize(newSize);
-    }
+    std::shuffle(begin(), end(), rng);
+    this->resize(newSize);
   }
 
   /** \brief Returns the number of `Candidate`s in this population dominated by
    * a given `Candidate`. */
   friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
     size_t cnt = 0;
+    std::lock_guard<std::mutex> lock(pop.mtx);
     for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
@@ -280,6 +286,7 @@ class Population : private std::vector<Candidate> {
    * dominate a given `Candidate`. */
   friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
     size_t cnt = 0;
+    std::lock_guard<std::mutex> lock(pop.mtx);
     for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
@@ -289,6 +296,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Returns a nondominated subset of this population. */
   Population<Candidate> front() {
     Population<Candidate> ret{};
+    std::lock_guard<std::mutex> lock(mtx);
     for(auto& c : *this)
       if(*this << c == 0)
         ret.add(c);
@@ -313,6 +321,7 @@ class Population : private std::vector<Candidate> {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
+    std::lock_guard<std::mutex> lock(mtx);
     for(Candidate &c : *this) {
       f = c.fitness();
       sf += f;
@@ -327,7 +336,6 @@ class Population : private std::vector<Candidate> {
   void ensureSorted() {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
-    std::lock_guard<std::mutex> lock(mtx);
     if(!sorted) {
       std::sort(begin(), end());
       sorted = true;
