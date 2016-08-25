@@ -5,6 +5,7 @@
 #include <chrono>
 #include <atomic>
 #include <iomanip>
+#include <omp.h>
 
 #ifdef BENCH
 #define NOINLINE __attribute__((noinline))
@@ -571,6 +572,9 @@ int main() {
 #ifdef BENCH
   gen::rng.seed(1);
 #endif
+#ifdef SINGLE
+  omp_set_num_threads(1);
+#endif
   Colours::use = isatty(1);
 
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
@@ -583,21 +587,12 @@ int main() {
     /* Create popSize2 children in parallel and admix parents */
     Population pop2(Config::popSize + Config::popSize2);
     CandidateFactory cf{pop};
-
-#ifndef SINGLE
-#pragma omp parallel for schedule(dynamic)
-#endif
-    for(size_t k = 0; k < Config::popSize2; k++) {
-      Candidate c{cf.getNew()};
-      c.fitness();  // skip lazy evaluation
-      pop2.add(std::move(c));
-    }
+    pop2.add(Config::popSize2, [&]() -> const Candidate { return cf.getNew(); }, true);
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.add(std::move(pop));
     
     /* Trim down to popSize using rankSelect */
-    /* MP doesn't help, most of the work needs to be serialized anyway */
     pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
       const Candidate &c = pop2.rankSelect(Config::trimBias);
       CandidateFactory::hit(c.getOrigin());
