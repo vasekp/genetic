@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <omp.h>
 
-#ifdef BENCH
+#ifdef DEBUG
 #define NOINLINE __attribute__((noinline))
 #else
 #define NOINLINE
@@ -19,7 +19,7 @@
 namespace Config {
   const size_t popSize = 100;
   const size_t popSize2 = 2000;
-#ifdef BENCH
+#ifdef DEBUG
   const int nGen = 100;
 #else
   const int nGen = 500;
@@ -586,8 +586,6 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
 int main() {
 #ifdef BENCH
   gen::rng.seed(1);
-#endif
-#ifdef SINGLE
   omp_set_num_threads(1);
 #endif
   Colours::use = isatty(1);

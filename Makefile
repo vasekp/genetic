@@ -24,11 +24,11 @@ CXXFLAGS += -fno-diagnostics-show-caret -fopenmp
 
 # Flags specific for different targets
 FLAGS += -O3
-FLAGS.b += -DBENCH -DSINGLE -O3
-FLAGS.d += -DBENCH -g
-FLAGS.od += -O3 -DBENCH -fno-inline-functions -g
-FLAGS.p += -O1 -DBENCH -pg
-FLAGS.op += -O3 -DBENCH -fno-inline-functions -pg
+FLAGS.b += -DBENCH -DDEBUG -O3
+FLAGS.d += -DDEBUG -g
+FLAGS.od += -O3 -DDEBUG -fno-inline-functions -g
+FLAGS.p += -O1 -DDEBUG -pg
+FLAGS.op += -O3 -DDEBUG -fno-inline-functions -pg
 
 
 # SECONDEXPANSION is necessary because otherwise $(SFX) wouldn't be known at 
