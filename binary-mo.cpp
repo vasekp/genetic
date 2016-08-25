@@ -16,10 +16,8 @@
 
 
 namespace Config {
-  const float selectBias = 1.0;
-  const float trimBias = 2.5;
-  const size_t popSize = 10000;
-  const size_t popSize2 = 30000;
+  const size_t popSize = 100;
+  const size_t popSize2 = 2000;
 #ifdef BENCH
   const int nGen = 100;
 #else
@@ -29,10 +27,6 @@ namespace Config {
   const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pDeleteUniform = 0.10;  // probability of single gate deletion 
-
-  const float pnIn = 10;              // penalty for leaving input register modified (= error)
-  const float pnLength = 1/10000.0;   // penalty for number of gates
-  const float pnControl = 1/3000.0;   // penalty for control (quadratic in number of C-ing bits)
 
   const float heurFactor = 0.15;      // how much prior success of genetic ops should influence future choices
 
@@ -132,7 +126,27 @@ class Gene {
 };
 
 
-class Candidate: public gen::Candidate<float> {
+struct Fitness {
+  unsigned misInput;
+  unsigned misOutput;
+  size_t length;
+  unsigned controls;
+
+  friend bool operator<< (const Fitness& a, const Fitness& b) {
+    return a.misInput < b.misInput || (a.misInput == b.misInput && a.misOutput <= b.misOutput && a.length <= b.length && a.controls <= b.controls && !(a == b));
+  }
+
+  friend std::ostream& operator<< (std::ostream& os, const Fitness& f) {
+    return os << '{' << f.misInput << ',' << f.misOutput << ',' << f.length << ',' << f.controls << '}';
+  }
+
+  friend bool operator== (const Fitness& a, const Fitness& b) {
+    return a.misInput == b.misInput && a.misOutput == b.misOutput && a.length == b.length && a.controls == b.controls;
+  }
+};
+
+
+class Candidate: public gen::Candidate<Fitness> {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
@@ -170,25 +184,26 @@ class Candidate: public gen::Candidate<float> {
   friend class CandidateFactory;
 
   private:
-  float NOINLINE computeFitness() const {
+  NOINLINE Fitness computeFitness() const {
     register unsigned work;
-    unsigned cmp;
-    unsigned mism = 0;
+    unsigned cmp, diff;
+    unsigned misIn = 0, misOut = 0;
     for(int in = 0; in < (1 << Config::nIn); in++) {
       work = in;
       for(const Gene& g : gt)
         work = g.apply(work);
       cmp = in | (Config::f(in) << Config::nIn);
-      mism += hamming(work ^ cmp);
-      mism += (Config::pnIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
+      diff = work ^ cmp;
+      misIn += hamming(diff & ((1 << Config::nIn) - 1));
+      misOut += hamming(diff >> Config::nIn);
     }
-    float penalty = gt.size()*Config::pnLength;
+    unsigned ctrl = 0;
     for(const Gene& g : gt) {
       unsigned h = g.weight();
-      penalty += h*h*Config::pnControl;
+      ctrl += h*h;
     }
     count++;
-    return mism + penalty;
+    return {misIn, misOut, gt.size(), ctrl};
   }
 
   inline static uint32_t hamming(register uint32_t x) {
@@ -250,7 +265,7 @@ class CandidateFactory {
 
   static void normalizeWeights() {
     unsigned total = std::accumulate(weights.begin(), weights.end(), 0);
-    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total;
+    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize2 / total;
     for(auto& w : weights)
       w *= factor;
   }
@@ -279,7 +294,7 @@ class CandidateFactory {
 
   private:
   const Candidate& get() {
-    return pop.rankSelect(Config::selectBias);
+    return pop.randomSelect();
   }
 
   Candidate mAlterTarget() {
@@ -579,40 +594,51 @@ int main() {
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
-    /* Create popSize2 children in parallel and admix parents */
-    Population pop2(Config::popSize + Config::popSize2);
+    /* Find the nondominated subset and trim down do popSize */
+    Population nondom = pop.front();
+    //std::cout << nondom.size();
+    nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
+        return a.fitness() == b.fitness();
+      }, Config::popSize);
+    nondom.randomTrim(Config::popSize);
+    //std::cout << " → " << nondom.size() << std::endl;
+    size_t nd = nondom.size();
+
+    for(auto& c : nondom)
+      CandidateFactory::hit(c.getOrigin());
+
+    /* Top up to popSize2 candidates */
+    Population pop2(Config::popSize2);
     CandidateFactory cf{pop};
 
 #ifndef SINGLE
 #pragma omp parallel for schedule(dynamic)
 #endif
-    for(size_t k = 0; k < Config::popSize2; k++) {
+    for(size_t k = 0; k < Config::popSize2 - nd; k++) {
       Candidate c{cf.getNew()};
       c.fitness();  // skip lazy evaluation
       pop2.add(std::move(c));
     }
 
-    /* Finally merge pop via move semantics, we don't need it anymore. */
-    pop2.add(std::move(pop));
-    
-    /* Trim down to popSize using rankSelect */
-    /* MP doesn't help, most of the work needs to be serialized anyway */
-    pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
-      const Candidate &c = pop2.rankSelect(Config::trimBias);
-      CandidateFactory::hit(c.getOrigin());
-      return c;
-    });
-
-    /* Unconditionally add the best candidate */
-    pop.add(pop2.best());
+    /* Merge the nondominated subset of the previous population */
+    pop2.add(std::move(nondom));
+    pop = std::move(pop2);
 
     /* Summarize */
-    const Candidate &best = pop.best();
+    /*const Candidate &best = pop.best();
     Population::Stat stat = pop.stat();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "
       "best of pop " << Colours::highlight() << best.fitness() << Colours::reset() <<
-      ": " << best << std::endl;
+      ": " << best << std::endl;*/
+    nondom = pop.front();
+    std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
+      nondom.size() << " nondominated";
+    if(nondom.size() > 0) {
+      const Candidate& e = nondom.randomSelect();
+      std::cout << ", e.g. " << e.fitness() << ' ' << e;
+    }
+    std::cout << std::endl;
 
     /* Make older generations matter less in the choice of gen. op. */
     CandidateFactory::normalizeWeights();
@@ -620,13 +646,31 @@ int main() {
 
   post = std::chrono::steady_clock::now();
   std::chrono::duration<double> dur = post - pre;
-  std::cout << std::endl << "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
-    Candidate::totalCount() << " candidates tested, best of run:" << std::endl;
+  std::cout << std::endl <<
+    "Run took " << dur.count() << " s (" << dur.count()/Config::nGen << " s/gen avg), " <<
+    Candidate::totalCount() << " candidates tested" << std::endl;
 
   /* List the best-of-run candidate */
-  pop.best().dump(std::cout);
+  /*Population nondom = pop.front();
+  std::cout << nondom.size() << " nondominated";
+  if(nondom.size() > 0) {
+    const Candidate& e = nondom.randomSelect();
+    std::cout << ", e.g. " << e.fitness() << ' ' << e << std::endl;;
+    e.dump(std::cout);
+  } else
+    std::cout << std::endl;*/
 
   /* Dump the heuristic distribution */
   std::cout << std::endl << "Genetic operator distribution:" << std::endl;
   CandidateFactory::dumpWeights(std::cout);
+
+  /* Delete candidates with duplicate fitnesses */
+  Population nondom = pop.front();
+  std::cout << std::endl << nondom.size() << " nondominated candidates, ";
+  nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
+      return a.fitness() == b.fitness();
+    });
+  std::cout << nondom.size() << " unique fitnesses:" << std::endl;
+  for(auto& c : nondom)
+    std::cout << c.fitness() << ' ' << c << std::endl;
 }

@@ -5,7 +5,7 @@
 #include <random>
 #include <algorithm>
 #include <type_traits>
-#include <mutex>
+#include <shared_mutex>
 
 #ifndef NOINLINE
 #define NOINLINE
@@ -13,7 +13,7 @@
 
 #include "genetic_bits/internal.hpp"
 #include "genetic_bits/globals.hpp"
-#include "genetic_bits/ICandidate.hpp"
+#include "genetic_bits/Candidate.hpp"
 #include "genetic_bits/Population.hpp"
 
 #endif

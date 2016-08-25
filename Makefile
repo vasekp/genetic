@@ -1,4 +1,4 @@
-PROGS = regex binary
+PROGS = regex binary binary-mo
 HEADERS = include/genetic include/genetic_bits/*.hpp
 
 # This allows to distinguish between binaries made for debug, profiling, etc.
@@ -18,7 +18,7 @@ optprofile: SFX = .op
 
 # Common C++ flags
 CXXFLAGS += -Iinclude
-CXXFLAGS += -std=c++11 -march=native
+CXXFLAGS += -std=c++14 -march=native
 CXXFLAGS += -pedantic -Wall -Wextra -Weffc++
 CXXFLAGS += -fno-diagnostics-show-caret -fopenmp
 

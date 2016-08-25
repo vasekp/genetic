@@ -1,6 +1,6 @@
 namespace gen {
 
-/** \brief The `Candidate` template.
+/** \brief The Candidate template.
  *
  * Takes a typename `Fitness` which can be a simple type or a class with a
  * a default constructor and, optionally, `operator<`. If the latter is
@@ -14,7 +14,7 @@ namespace gen {
  * default constructor (or provide default values for all arguments in some
  * constructor) for the purposes of Population. */
 template<typename Fitness>
-class ICandidate {
+class Candidate {
   mutable Fitness _fitness{};
   mutable bool fitnessValid = false;
 
@@ -22,7 +22,7 @@ class ICandidate {
   /** \brief The `Fitness` type provided for this template specialization. */
   typedef Fitness _FitnessType;
 
-  /** \brief Returns this `Candidate`'s fitness, calculating it on request if not
+  /** \brief Returns this candidate's fitness, calculating it on request if not
    * known from before. */
   Fitness fitness() const {
     if(!fitnessValid) {
@@ -32,24 +32,35 @@ class ICandidate {
     return _fitness;
   }
 
-  /** \brief Compares two `Candidate`s by the Fitness's `operator<`.
+  /** \brief Compares two `Candidate`s by the `Fitness`'s `operator<`.
    *
    * The `operator<` of `Fitness` is expected to be a total ordering for the
    * purposes of sorting the Population by fitness. This method is not
    * generated if `Fitness::operator<()` does not exist or does not return a
    * boolean value. */
   friend inline bool
-  operator< (const ICandidate<Fitness>& c1, const ICandidate<Fitness>& c2) {
+  operator< (const Candidate<Fitness>& c1, const Candidate<Fitness>& c2) {
     return c1.fitness() < c2.fitness();
   }
 
-  virtual ~ICandidate() { }
+  /** \brief Compares two `Candidate`s by the `Fitness`'s `operator<<`.
+   *
+   * The `operator<<` of `Fitness` is expected to be a partial ordering
+   * denoting dominance in multiobjective searches. This method is not
+   * generated if `Fitness::operator<<()` does not exist or does not return a
+   * boolean value. */
+  friend inline bool
+  operator<< (const Candidate<Fitness>& c1, const Candidate<Fitness>& c2) {
+    return c1.fitness() << c2.fitness();
+  }
+
+  virtual ~Candidate() { }
 
   protected:
   /** \brief The internal fitness computation, called the first time this
-   * `Candidate`'s fitness() is queried. Every derived class must implement
+   * candidate's fitness() is queried. Every derived class must implement
    * this routine. */
   virtual Fitness computeFitness() const = 0;
-}; // class ICandidate
+}; // class Candidate
 
 } // namespace gen

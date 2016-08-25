@@ -2,12 +2,13 @@ namespace gen {
 
 /** \brief The Population template.
  *
- * Requires a `Candidate` class derived from ICandidate and implementing a
+ * Requires a `Candidate` class derived from gen::Candidate and implementing a
  * default constructor. */
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
-  std::mutex mtx{};
+  typedef std::shared_timed_mutex mutex_t;
+  mutable mutex_t mtx{};
 
   static_assert(std::is_default_constructible<Candidate>::value,
       "The Candidate type needs to provide a default constructor.");
@@ -15,10 +16,16 @@ class Population : private std::vector<Candidate> {
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
   static_assert(internal::hasFT<Candidate>(nullptr) &&
-      std::is_base_of<ICandidate<_FitnessType>, Candidate>::value,
-      "The Candidate type needs to be derived from ICandidate.");
+      std::is_base_of<gen::Candidate<_FitnessType>, Candidate>::value,
+      "The Candidate type needs to be derived from gen::Candidate.");
 
   public:
+  using std::vector<Candidate>::begin;
+  using std::vector<Candidate>::end;
+  using std::vector<Candidate>::size;
+  using std::vector<Candidate>::clear;
+  using std::vector<Candidate>::operator[];
+
   /** \brief Creates an empty population. */
   Population() = default;
 
@@ -50,7 +57,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     std::vector<Candidate>::operator=(_p);
     sorted = _p.sorted;
     return *this;
@@ -58,7 +65,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Move assignment operator. */
   Population& operator=(Population&& _p) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     std::vector<Candidate>::operator=(std::move(_p));
     sorted = _p.sorted;
     return *this;
@@ -66,14 +73,14 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Adds a new candidate. */
   void add(const Candidate& c) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->push_back(c);
     sorted = false;
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->push_back(std::forward<Candidate>(c));
     sorted = false;
   }
@@ -89,7 +96,7 @@ class Population : private std::vector<Candidate> {
    * The template allows for optimizations (inlining) in the latter case. */
   template<class Source>
   void NOINLINE add(size_t count, Source src) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + count);
     for(size_t j = 0; j < count; j++)
       this->push_back(src());
@@ -104,7 +111,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Copies an iterator range from a container of `Candidate`s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + std::distance(first, last));
     this->insert(end(), first, last);
     sorted = false;
@@ -112,7 +119,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Moves all candidates from a vector of `Candidate`s. */
   void NOINLINE add(std::vector<Candidate>&& vec) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<mutex_t> lock(mtx);
     this->reserve(size() + vec.size());
     this->insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
     vec.clear();
@@ -129,11 +136,70 @@ class Population : private std::vector<Candidate> {
     return add(static_cast<std::vector<Candidate>&&>(pop));
   }
 
-  using std::vector<Candidate>::begin;
-  using std::vector<Candidate>::end;
-  using std::vector<Candidate>::size;
-  using std::vector<Candidate>::clear;
-  using std::vector<Candidate>::operator[];
+  /** \brief Reduces the population to a maximum size given by the argument,
+   * dropping the worst part of the sample.
+   *
+   * Applicable only if the fitness type of `Candidate` allows total ordering
+   * using `operator<`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied.
+   *
+   * \param newSize the maximum desired size of the population. If this bound
+   * is satisfied, the population is unchanged. */
+  void rankTrim(size_t newSize) {
+    if(size() <= newSize)
+      return;
+    std::lock_guard<mutex_t> lock(mtx);
+    ensureSorted();
+    this->resize(newSize);
+  }
+
+  /** \brief Reduces the population to a maximum size given by the argument,
+   * using random selection if the latter is smaller.
+   *
+   * \param newSize the maximum desired size of the population. If this bound
+   * is satisfied, the population is unchanged.
+   * \param rng the random number generator, or gen::rng by default. */
+  template<class Rng = decltype(rng)>
+  void randomTrim(size_t newSize, Rng& rng = rng) {
+    if(size() <= newSize)
+      return;
+    std::lock_guard<mutex_t> lock(mtx);
+    shuffle(rng);
+    this->resize(newSize);
+  }
+
+  /** \brief Reduces the population by selective removal of candidates.
+   * 
+   * Candidates are tested for similarity according to a provided crierion
+   * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
+   * is kept. A minimum number of candidates can be set; if so, the procedure
+   * stops when enough candidates have been removed to satisfy this bound.
+   *
+   * \param test a boolean function accepting two `const Candidate`
+   * references. Should be symmetric in its arguments. If the return value is
+   * `true` the latter candidate is removed from the population.
+   * \param minSize a minimum number of candidates to be kept if possible. If
+   * zero (the default value), all duplicates are removed.
+   * \param randomize whether to randomly shuffle the sample prior to pruning
+   * (this is the default). If `false` then earlier appearing candidates are
+   * preferred in survival.
+   * \param rng the random number generator, or gen::rng by default. */
+  template<class Rng = decltype(rng)>
+  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+    if(size() <= minSize)
+      return;
+    std::lock_guard<mutex_t> lock(mtx);
+    if(randomize)
+      shuffle(rng);
+    size_t sz = size();
+    for(size_t i = 0; i < sz - 1; i++)
+      for(size_t j = sz - 1; j > i; j--)
+        if(test((*this)[i], (*this)[j])) {
+          this->erase(begin() + j);
+          if(--sz <= minSize)
+            return;
+        }
+  }
 
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
@@ -156,7 +222,7 @@ class Population : private std::vector<Candidate> {
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    * 
-   * \returns a constant reference to a randomly chosen `Candidate`. */
+   * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& NOINLINE rankSelect(float bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
@@ -188,12 +254,13 @@ class Population : private std::vector<Candidate> {
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    * 
-   * \returns a constant reference to a randomly chosen `Candidate`. */
+   * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate& NOINLINE rankSelect(double bias, Rng& rng = rng) {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
+    std::lock_guard<mutex_t> lock(mtx);
     size_t sz = size();
     if(sz != last_sz) {
       probs.clear();
@@ -211,8 +278,9 @@ class Population : private std::vector<Candidate> {
   template<class Rng>
   const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
-    ensureSorted();
     double x = rDist(rng);
+    std::lock_guard<mutex_t> lock(mtx);
+    ensureSorted();
     if(x == 1)
       return this->back();
     else
@@ -220,6 +288,13 @@ class Population : private std::vector<Candidate> {
   }
 
   public:
+  /** \brief Retrieves a candidate chosen using uniform random selection. */
+  template<class Rng = decltype(rng)>
+  const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
+    std::shared_lock<mutex_t> lock(mtx);
+    std::uniform_int_distribution<size_t> dist{0, size() - 1};
+    return (*this)[dist(rng)];
+  }
 
   /** \brief Returns the best candidate of population.
    *
@@ -230,22 +305,41 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
+    std::lock_guard<mutex_t> lock(mtx);
     ensureSorted();
-    return this->front();
+    return std::vector<Candidate>::front();
   }
 
-  /** \brief Reduces the population to a maximum size given by the argument,
-   * dropping the worst part of the sample.
-   *
-   * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates an error at compile time in
-   * specializations for which this condition is not satisfied. */
-  Population<Candidate>& trim(size_t newSize) {
-    ensureSorted();
-    std::lock_guard<std::mutex> lock(mtx);
-    if(size() > newSize)
-      this->resize(newSize);
-    return *this;
+  /** \brief Returns the number of candidates in this population dominated by
+   * a given candidate. */
+  friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
+    size_t cnt = 0;
+    std::shared_lock<mutex_t> lock(pop.mtx);
+    for(auto& cmp : pop)
+      if(c << cmp)
+        cnt++;
+    return cnt;
+  }
+
+  /** \brief Returns the number of candidates in this population that
+   * dominate a given candidate. */
+  friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
+    size_t cnt = 0;
+    std::shared_lock<mutex_t> lock(pop.mtx);
+    for(auto& cmp : pop)
+      if(cmp << c)
+        cnt++;
+    return cnt;
+  }
+
+  /** \brief Returns a nondominated subset of this population. */
+  Population<Candidate> front() {
+    Population<Candidate> ret{};
+    std::shared_lock<mutex_t> lock(mtx);
+    for(auto& c : *this)
+      if(*this << c == 0)
+        ret.add(c);
+    return ret;
   }
 
 
@@ -261,11 +355,15 @@ class Population : private std::vector<Candidate> {
    * Applicable only to candidate classes whose fitness is a simple floating
    * point type or allows an implicit convertion to one. This method
    * generates an error at compile time in specializations for which this
-   * condition is not satisfied. */
+   * condition is not satisfied.
+   *
+   * \see Stat
+   */
   Stat stat() {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
+    std::shared_lock<mutex_t> lock(mtx);
     for(Candidate &c : *this) {
       f = c.fitness();
       sf += f;
@@ -280,11 +378,16 @@ class Population : private std::vector<Candidate> {
   void ensureSorted() {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
-    std::lock_guard<std::mutex> lock(mtx);
     if(!sorted) {
       std::sort(begin(), end());
       sorted = true;
     }
+  }
+
+  template<class Rng = decltype(rng)>
+  void shuffle(Rng& rng) {
+    std::shuffle(begin(), end(), rng);
+    sorted = false;
   }
 }; // class Population
 
