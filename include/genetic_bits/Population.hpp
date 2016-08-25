@@ -290,7 +290,7 @@ class Population : private std::vector<Candidate> {
   public:
   /** \brief Retrieves a candidate chosen using uniform random selection. */
   template<class Rng = decltype(rng)>
-  const Candidate& NOINLINE randomSelect(Rng& rng = rng) {
+  const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
     std::shared_lock<mutex_t> lock(mtx);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
@@ -359,12 +359,12 @@ class Population : private std::vector<Candidate> {
    *
    * \see Stat
    */
-  Stat stat() {
+  Stat stat() const {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
     std::shared_lock<mutex_t> lock(mtx);
-    for(Candidate &c : *this) {
+    for(const Candidate &c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;

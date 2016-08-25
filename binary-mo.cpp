@@ -166,9 +166,8 @@ class Candidate: public gen::Candidate<Fitness> {
     return os;
   }
 
-  Candidate& setOrigin(int _origin) {
+  void setOrigin(int _origin) {
     origin = _origin;
-    return *this;
   }
 
   int getOrigin() const {
@@ -255,7 +254,9 @@ class CandidateFactory {
 
   Candidate NOINLINE getNew() {
     int index = dFun(gen::rng);
-    return (this->*func[index].first)().setOrigin(index);
+    Candidate c = (this->*func[index].first)();
+    c.setOrigin(index);
+    return c;
   }
 
   static void hit(int ix) {
