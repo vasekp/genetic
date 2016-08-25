@@ -203,6 +203,7 @@ class Population : private std::vector<Candidate> {
       iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
       last_sz = sz;
     }
+    std::lock_guard<std::mutex> lock(mtx);
     ensureSorted();
     return (*this)[iDist(rng)];
   }
@@ -211,8 +212,9 @@ class Population : private std::vector<Candidate> {
   template<class Rng>
   const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
-    ensureSorted();
     double x = rDist(rng);
+    std::lock_guard<std::mutex> lock(mtx);
+    ensureSorted();
     if(x == 1)
       return this->back();
     else
@@ -230,6 +232,7 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
+    std::lock_guard<std::mutex> lock(mtx);
     ensureSorted();
     return this->front();
   }
@@ -241,8 +244,8 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   Population<Candidate>& trim(size_t newSize) {
-    ensureSorted();
     std::lock_guard<std::mutex> lock(mtx);
+    ensureSorted();
     if(size() > newSize)
       this->resize(newSize);
     return *this;
@@ -266,6 +269,7 @@ class Population : private std::vector<Candidate> {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
+    std::lock_guard<std::mutex> lock(mtx);
     for(Candidate &c : *this) {
       f = c.fitness();
       sf += f;
@@ -280,7 +284,6 @@ class Population : private std::vector<Candidate> {
   void ensureSorted() {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
-    std::lock_guard<std::mutex> lock(mtx);
     if(!sorted) {
       std::sort(begin(), end());
       sorted = true;
