@@ -77,9 +77,6 @@ class Candidate: public gen::Candidate<Fitness> {
     }
   }
 
-  /* Needed so that default copy, move, operator= can be used */
-  Candidate() = default;
-
   std::string getRE() const {
     return reS;
   }

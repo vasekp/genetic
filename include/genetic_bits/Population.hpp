@@ -9,9 +9,6 @@ class Population : private std::vector<Candidate> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
-  static_assert(std::is_default_constructible<Candidate>::value,
-      "The Candidate type needs to provide a default constructor.");
-
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
   static_assert(internal::hasFT<Candidate>(nullptr) &&
@@ -160,11 +157,12 @@ class Population : private std::vector<Candidate> {
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
+    internal::write_lock lock(smp);
     if(size() <= newSize)
       return;
-    internal::write_lock lock(smp);
     ensureSorted(lock);
-    this->resize(newSize);
+    const Candidate& dummy = *begin();  // needed by resize() if size() < newSize which can't happen
+    this->resize(newSize, dummy);       // (otherwise we would need a default constructor)
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -175,11 +173,12 @@ class Population : private std::vector<Candidate> {
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
+    internal::write_lock lock(smp);
     if(size() <= newSize)
       return;
-    internal::write_lock lock(smp);
     shuffle(rng);
-    this->resize(newSize);
+    const Candidate& dummy = *begin();  // see rankTrim()
+    this->resize(newSize, dummy);
   }
 
   /** \brief Reduces the population by selective removal of candidates.
@@ -319,9 +318,13 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
+    static_assert(internal::comparable<_FitnessType>(0),
+        "This method requires the fitness type to implement an operator<.");
     internal::read_lock lock(smp);
-    ensureSorted(lock);
-    return std::vector<Candidate>::front();
+    if(sorted)
+      return std::vector<Candidate>::front();
+    else
+      return *std::min_element(begin(), end());
   }
 
   /** \brief Returns the number of candidates in this population dominated by
@@ -353,10 +356,17 @@ class Population : private std::vector<Candidate> {
     Population<Candidate> ret{};
     internal::read_lock lock(smp);
     size_t sz = size();
-#pragma omp parallel for if(parallel)
-    for(size_t i = 0; i < sz; i++)
-      if(*this << (*this)[i] == 0)
+    std::vector<char> dom(sz, 0);
+    #pragma omp parallel for if(parallel)
+    for(size_t i = 0; i < sz; i++) {
+      for(size_t j = 0; j < sz; j++)
+        if(!dom[j] && (*this)[j] << (*this)[i]) {
+          dom[i] = 1;
+          break;
+        }
+      if(!dom[i])
         ret.add((*this)[i]);
+    }
     return ret;
   }
 
