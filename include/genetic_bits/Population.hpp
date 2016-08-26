@@ -358,10 +358,17 @@ class Population : private std::vector<Candidate> {
     Population<Candidate> ret{};
     std::shared_lock<mutex_t> lock(mtx);
     size_t sz = size();
-#pragma omp parallel for if(parallel)
-    for(size_t i = 0; i < sz; i++)
-      if(*this << (*this)[i] == 0)
+    std::vector<char> dom(sz, 0);
+    #pragma omp parallel for if(parallel)
+    for(size_t i = 0; i < sz; i++) {
+      for(size_t j = 0; j < sz; j++)
+        if(!dom[j] && (*this)[j] << (*this)[i]) {
+          dom[i] = 1;
+          break;
+        }
+      if(!dom[i])
         ret.add((*this)[i]);
+    }
     return ret;
   }
 
