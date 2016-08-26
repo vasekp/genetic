@@ -294,7 +294,10 @@ class CandidateFactory {
 
   private:
   const Candidate& get() {
-    return pop.randomSelect();
+    /* Select k random candidates without replacement
+     * Remove dominated candidates from selection
+     * Select randomly from the rest */
+    return pop.randomSelect(5).front().randomSelect();
   }
 
   Candidate mAlterTarget() {
