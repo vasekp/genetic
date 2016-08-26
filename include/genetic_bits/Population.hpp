@@ -9,9 +9,6 @@ class Population : private std::vector<Candidate> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
-  static_assert(std::is_default_constructible<Candidate>::value,
-      "The Candidate type needs to provide a default constructor.");
-
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
   static_assert(internal::hasFT<Candidate>(nullptr) &&
@@ -160,11 +157,12 @@ class Population : private std::vector<Candidate> {
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
+    internal::write_lock lock(smp);
     if(size() <= newSize)
       return;
-    internal::write_lock lock(smp);
     ensureSorted(lock);
-    this->resize(newSize);
+    const Candidate& dummy = *begin();  // needed by resize() if size() < newSize which can't happen
+    this->resize(newSize, dummy);       // (otherwise we would need a default constructor)
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -175,11 +173,12 @@ class Population : private std::vector<Candidate> {
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
+    internal::write_lock lock(smp);
     if(size() <= newSize)
       return;
-    internal::write_lock lock(smp);
     shuffle(rng);
-    this->resize(newSize);
+    const Candidate& dummy = *begin();  // see rankTrim()
+    this->resize(newSize, dummy);
   }
 
   /** \brief Reduces the population by selective removal of candidates.

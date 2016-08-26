@@ -154,8 +154,6 @@ class Candidate: public gen::Candidate<Fitness> {
 
   public:
 
-  Candidate() = default;
-
   /* Note to self: copying is suboptimal. This will make the compiler scream at me if I forget. */
   Candidate(std::vector<Gene>& _gt) = delete;
 
