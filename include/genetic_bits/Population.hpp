@@ -2,8 +2,7 @@ namespace gen {
 
 /** \brief The Population template.
  *
- * Requires a `Candidate` class derived from gen::Candidate and implementing a
- * default constructor. */
+ * Requires a `Candidate` class derived from gen::Candidate. */
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
@@ -11,8 +10,7 @@ class Population : private std::vector<Candidate> {
 
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
-  static_assert(internal::hasFT<Candidate>(nullptr) &&
-      std::is_base_of<gen::Candidate<_FitnessType>, Candidate>::value,
+  static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
 
   public:
@@ -21,6 +19,9 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::size;
   using std::vector<Candidate>::clear;
   using std::vector<Candidate>::operator[];
+
+  /** \see RefPopulation. */
+  typedef Population<std::reference_wrapper<const Candidate>> Ref;
 
   /** \brief Creates an empty population. */
   Population() = default;
@@ -309,6 +310,30 @@ class Population : private std::vector<Candidate> {
     return (*this)[dist(rng)];
   }
 
+  /** \brief Randomly selects `k` different candidates. */
+  template<class Rng = decltype(rng)>
+#ifdef DOXYGEN
+  RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+#else
+  Ref NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+#endif
+    internal::read_lock lock(smp);
+    size_t sz = size();
+    std::vector<size_t> idx(sz);
+    /* Fisher-Yates without initialization! */
+    for(size_t i = 0; i < k; i++) {
+      size_t d = rng() % (sz - i), j = i+d;
+      std::swap(idx[i], idx[j]);
+      idx[j] -= d;
+      idx[i] += i + d;
+    }
+    idx.resize(k);
+    Ref ret(k);
+    for(auto i : idx)
+      ret.add((*this)[i]);
+    return ret;
+  }
+
   /** \brief Returns the best candidate of population.
    *
    * If more candidates have equal best fitness the returned reference may be
@@ -419,5 +444,18 @@ class Population : private std::vector<Candidate> {
     sorted = false;
   }
 }; // class Population
+
+
+/** \brief A "reference population", a helper type for functions returning a
+ * selection from an existing Population.
+ *
+ * This effectively allows to make a Population of references to Candidate,
+ * e.g., to store the return value of Population::randomSelect(). <!-- FIXME
+ * why won't Doxygen recognize Population::randomSelect(size_t, Rng&)? -->
+ * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
+ * like functions dependent on the existence of Candidate::operator< or
+ * Candidate::operator<<. */
+template<class Candidate>
+using RefPopulation = typename Population<Candidate>::Ref;
 
 } // namespace gen

@@ -22,7 +22,7 @@ namespace internal {
       std::is_convertible<decltype(std::declval<C>() < std::declval<C>()), bool>::value,
     bool>::type { return true; }
 
-  template<typename C>
+  template<typename>
   constexpr bool comparable(...) { return false; }
 
   /* Helper for enabling functions dependent on dominance */
@@ -32,21 +32,26 @@ namespace internal {
       std::is_convertible<decltype(std::declval<C>() << std::declval<C>()), bool>::value,
     bool>::type { return true; }
 
-  template<typename C>
+  template<typename>
   constexpr bool dominable(...) { return false; }
   
-  /* Helpers for detecting if a Candidate is derived from gen::Candidate */
-  template<class T>
-  constexpr bool hasFT(typename T::_FitnessType*) { return true; }
+  /* Helper for detecting if a Candidate is a class derived from gen::Candidate or a
+   * reference_wrapper of some */
+  template<typename T>
+  T unwrap(std::reference_wrapper<T>);
 
-  template<class T>
-  constexpr bool hasFT(...) { return false; }
+  template<typename T>
+  T unwrap(T);
 
-  template<class T>
-  typename T::_FitnessType detectFT(T*);
+  template<typename C>
+  decltype(unwrap(std::declval<C>()).fitness()) detectFT(C*);
 
-  template<class T>
-  void detectFT(...);
+  template<typename C>
+  // Returning C is a trick; void would break Candidate<_FitnessType> in
+  // the static_assert of Population.hpp. This works as well, if C is not a
+  // Candidate<?> then C& is not convertible to const Candidate<C>& (or should
+  // not be).
+  C detectFT(...);
 
 } // namespace internal
 

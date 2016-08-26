@@ -19,9 +19,6 @@ class Candidate {
   mutable bool fitnessValid = false;
 
   public:
-  /** \brief The `Fitness` type provided for this template specialization. */
-  typedef Fitness _FitnessType;
-
   /** \brief Returns this candidate's fitness, calculating it on request if not
    * known from before. */
   Fitness fitness() const {
