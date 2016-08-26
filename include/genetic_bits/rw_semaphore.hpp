@@ -3,12 +3,12 @@ namespace gen {
 /* Internal functions only to be used from other sources in this directory. */
 namespace internal {
 
+  /* Writers preference */
   struct rw_semaphore {
     protected:
-    unsigned r{0};
-    unsigned w{0};
-    std::mutex m{};
-    std::condition_variable cv{};
+    std::mutex m{};  // protects both the members of this and the resource
+    unsigned r{0}, w{0};  // active readers, waiting writers
+    std::condition_variable rq{}, wq{};  // read queue, write queue
 
     friend class rw_lock;
 
@@ -23,6 +23,12 @@ namespace internal {
 
 
   class rw_lock {
+    /* Invariants:
+     *  mutex free ⇒ semaphore members and resource constant
+     *  pers_lock free ⇒ no active writes (resource constant)
+     *  w = 0 ⇒ rq notified
+     *  r = 0 ⇒ wq notified
+     *  write active ⇒ r = 0, w > 0, pers_lock */
     rw_semaphore& s;
     std::unique_lock<std::mutex> pers_lock{};
     bool write{false};
@@ -32,17 +38,17 @@ namespace internal {
       if(write) {
         // Logic: write creates a persistent lock, preventing other writes from
         // starting. They can still execute ++s.w to let themselves known but
-        // this enqueues them at the end of cv.wait. Write can only start when
+        // this enqueues them at the end of wq.wait. Write can only start when
         // everyone is finished reading.
         pers_lock = std::unique_lock<std::mutex>(s.m);
         ++s.w;
-        s.cv.wait(pers_lock, [&] { return s.r == 0; });
+        s.wq.wait(pers_lock, [&] { return s.r == 0; });
       } else {
-        // Logic: read creates a temporary lock for the purposes of cv.wait and
+        // Logic: read creates a temporary lock for the purposes of rq.wait and
         // s.r access. Read can only start when no one is writing or waiting to
         // write.
         std::unique_lock<std::mutex> temp_lock(s.m);
-        s.cv.wait(temp_lock, [&] { return s.w == 0; });
+        s.rq.wait(temp_lock, [&] { return s.w == 0; });
         ++s.r;
       }
     }
@@ -51,12 +57,14 @@ namespace internal {
       if(write) {
         --s.w;
         pers_lock.unlock();
+        s.rq.notify_all();
       } else {
-        std::unique_lock<std::mutex> temp_lock(s.m);
-        --s.r;
+        {
+          std::unique_lock<std::mutex> temp_lock(s.m);
+          --s.r;
+        }
+        s.wq.notify_all();
       }
-      // Notify whomever may be waiting for r=0 or w=0
-      s.cv.notify_all();
     }
 
     rw_lock(const rw_lock&) = delete;
@@ -69,14 +77,17 @@ namespace internal {
       if(write)
         return false;
       // Atomically combined action of -read and +write
-      // No cv.notify_all: it makes no sense for a waiting write to wake up now;
-      // a read is technically still underway. Moreover, we're a writing thread
-      // with work to do.
       pers_lock = std::unique_lock<std::mutex>(s.m);
       ++s.w;
       --s.r;
       write = true;
-      s.cv.wait(pers_lock, [&] { return s.r == 0; });
+      s.wq.wait(pers_lock, [&] { return s.r == 0; });
+      // It makes no sense for another waiting write to wake up now, that
+      // would defeat the purpose of the upgrade. But we need to notify the
+      // other threads that r might be zero as no one else would do that.
+      // Keeping pers_lock allows them to exit wait() but stay stuck at the
+      // mutex lock.
+      s.wq.notify_all();
       return true;
     }
 
@@ -84,12 +95,12 @@ namespace internal {
       if(!write)
         return;
       // Atomically combined action of -write and +read.
-      // cv.notify_all: other waiting reads can proceed now, the write is done
       --s.w;
       ++s.r;
       write = false;
       pers_lock.unlock();
-      s.cv.notify_all();
+      // Other waiting reads can proceed now, the write is done
+      s.rq.notify_all();
     }
   };
 
