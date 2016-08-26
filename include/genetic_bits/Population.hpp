@@ -319,9 +319,13 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
+    static_assert(internal::comparable<_FitnessType>(0),
+        "This method requires the fitness type to implement an operator<.");
     internal::read_lock lock(smp);
-    ensureSorted(lock);
-    return std::vector<Candidate>::front();
+    if(sorted)
+      return std::vector<Candidate>::front();
+    else
+      return *std::min_element(begin(), end());
   }
 
   /** \brief Returns the number of candidates in this population dominated by
@@ -353,10 +357,17 @@ class Population : private std::vector<Candidate> {
     Population<Candidate> ret{};
     internal::read_lock lock(smp);
     size_t sz = size();
-#pragma omp parallel for if(parallel)
-    for(size_t i = 0; i < sz; i++)
-      if(*this << (*this)[i] == 0)
+    std::vector<char> dom(sz, 0);
+    #pragma omp parallel for if(parallel)
+    for(size_t i = 0; i < sz; i++) {
+      for(size_t j = 0; j < sz; j++)
+        if(!dom[j] && (*this)[j] << (*this)[i]) {
+          dom[i] = 1;
+          break;
+        }
+      if(!dom[i])
         ret.add((*this)[i]);
+    }
     return ret;
   }
 
