@@ -7,8 +7,7 @@ namespace gen {
 template<class Candidate>
 class Population : private std::vector<Candidate> {
   bool sorted = false;
-  typedef std::shared_timed_mutex mutex_t;
-  mutable mutex_t mtx{};
+  mutable internal::rw_semaphore smp{};
 
   static_assert(std::is_default_constructible<Candidate>::value,
       "The Candidate type needs to provide a default constructor.");
@@ -46,7 +45,7 @@ class Population : private std::vector<Candidate> {
     add(count, src, precompute, parallel);
   }
 
-  /* The Big Four: trivial but we need them because the mutex can't be 
+  /* The Big Four: trivial but we need them because the semaphore can't be 
    * default copied or moved */
 
   /** \brief The copy constructor. */
@@ -57,7 +56,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     std::vector<Candidate>::operator=(_p);
     sorted = _p.sorted;
     return *this;
@@ -65,7 +64,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Move assignment operator. */
   Population& operator=(Population&& _p) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     std::vector<Candidate>::operator=(std::move(_p));
     sorted = _p.sorted;
     return *this;
@@ -73,14 +72,14 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Adds a new candidate. */
   void add(const Candidate& c) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     this->push_back(c);
     sorted = false;
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     this->push_back(std::forward<Candidate>(c));
     sorted = false;
   }
@@ -99,7 +98,7 @@ class Population : private std::vector<Candidate> {
    * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
   void NOINLINE add(size_t count, Source src, bool precompute = false, bool parallel = true) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     this->reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
@@ -126,7 +125,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Copies an iterator range from a container of `Candidate`s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     this->reserve(size() + std::distance(first, last));
     this->insert(end(), first, last);
     sorted = false;
@@ -134,7 +133,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Moves all candidates from a vector of `Candidate`s. */
   void NOINLINE add(std::vector<Candidate>&& vec) {
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     this->reserve(size() + vec.size());
     this->insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
     vec.clear();
@@ -163,8 +162,8 @@ class Population : private std::vector<Candidate> {
   void rankTrim(size_t newSize) {
     if(size() <= newSize)
       return;
-    std::lock_guard<mutex_t> lock(mtx);
-    ensureSorted();
+    internal::write_lock lock(smp);
+    ensureSorted(lock);
     this->resize(newSize);
   }
 
@@ -178,7 +177,7 @@ class Population : private std::vector<Candidate> {
   void randomTrim(size_t newSize, Rng& rng = rng) {
     if(size() <= newSize)
       return;
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     shuffle(rng);
     this->resize(newSize);
   }
@@ -203,7 +202,7 @@ class Population : private std::vector<Candidate> {
   void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     if(size() <= minSize)
       return;
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::write_lock lock(smp);
     if(randomize)
       shuffle(rng);
     size_t sz = size();
@@ -275,7 +274,7 @@ class Population : private std::vector<Candidate> {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
-    std::lock_guard<mutex_t> lock(mtx);
+    internal::read_lock lock(smp);
     size_t sz = size();
     if(sz != last_sz) {
       probs.clear();
@@ -285,7 +284,7 @@ class Population : private std::vector<Candidate> {
       iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
       last_sz = sz;
     }
-    ensureSorted();
+    ensureSorted(lock);
     return (*this)[iDist(rng)];
   }
 
@@ -294,8 +293,8 @@ class Population : private std::vector<Candidate> {
   const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
     double x = rDist(rng);
-    std::lock_guard<mutex_t> lock(mtx);
-    ensureSorted();
+    internal::read_lock lock(smp);
+    ensureSorted(lock);
     if(x == 1)
       return this->back();
     else
@@ -306,7 +305,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Retrieves a candidate chosen using uniform random selection. */
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
-    std::shared_lock<mutex_t> lock(mtx);
+    internal::read_lock lock(smp);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
   }
@@ -320,8 +319,8 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
   const Candidate& best() {
-    std::lock_guard<mutex_t> lock(mtx);
-    ensureSorted();
+    internal::read_lock lock(smp);
+    ensureSorted(lock);
     return std::vector<Candidate>::front();
   }
 
@@ -329,7 +328,7 @@ class Population : private std::vector<Candidate> {
    * a given candidate. */
   friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
     size_t cnt = 0;
-    std::shared_lock<mutex_t> lock(pop.mtx);
+    internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
@@ -340,7 +339,7 @@ class Population : private std::vector<Candidate> {
    * dominate a given candidate. */
   friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
     size_t cnt = 0;
-    std::shared_lock<mutex_t> lock(pop.mtx);
+    internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
@@ -352,7 +351,7 @@ class Population : private std::vector<Candidate> {
    * \param parallel controls parallelization using OpenMP (on by default) */
   Population<Candidate> front(bool parallel = true) const {
     Population<Candidate> ret{};
-    std::shared_lock<mutex_t> lock(mtx);
+    internal::read_lock lock(smp);
     size_t sz = size();
 #pragma omp parallel for if(parallel)
     for(size_t i = 0; i < sz; i++)
@@ -382,7 +381,7 @@ class Population : private std::vector<Candidate> {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
-    std::shared_lock<mutex_t> lock(mtx);
+    internal::read_lock lock(smp);
     for(const Candidate &c : *this) {
       f = c.fitness();
       sf += f;
@@ -394,10 +393,11 @@ class Population : private std::vector<Candidate> {
   }
 
   private:
-  void ensureSorted() {
+  void ensureSorted(internal::rw_lock& lock) {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
     if(!sorted) {
+      internal::upgrade_lock up(lock);
       std::sort(begin(), end());
       sorted = true;
     }

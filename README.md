@@ -1,6 +1,6 @@
 # Introduction
 
-This is a simple genetic algorithm framework written in C++14 and intending to 
+This is a simple genetic algorithm framework written in C++11 and intending to 
 be generic, parallelized, and simple to use. The encoding, and indeed any 
 internal structure of the candidate and fitness, are completely up to the 
 particular implementation. Both single- and multi-objective searches are 
