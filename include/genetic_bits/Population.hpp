@@ -8,6 +8,10 @@ class Population : private std::vector<Candidate> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
+  typedef decltype(internal::unwrap(std::declval<Candidate>())) _Candidate;
+#ifdef DOXYGEN
+#define _Candidate Candidate
+#endif
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
@@ -21,7 +25,7 @@ class Population : private std::vector<Candidate> {
   using std::vector<Candidate>::operator[];
 
   /** \see RefPopulation. */
-  typedef Population<std::reference_wrapper<const Candidate>> Ref;
+  typedef Population<std::reference_wrapper<const _Candidate>> Ref;
 
   /** \brief Creates an empty population. */
   Population() = default;
@@ -226,6 +230,11 @@ class Population : private std::vector<Candidate> {
    * lookup.  The default value is `std::exp`, for which an equivalent fast
    * replacement algorithm is provided.
    *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use rankSelect_v(double, Rng&) instead.
+   *
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
@@ -238,16 +247,15 @@ class Population : private std::vector<Candidate> {
    * 
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& NOINLINE rankSelect(double bias, Rng& rng = rng) {
+  const Candidate& rankSelect(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp(bias, rng);
+      return rankSelect_exp<const Candidate&>(bias, rng);
     else
-      return rankSelect<
-        static_cast<double(*)(double, double)>(&internal::eval_in_product<fun>)
-        > (bias);
+      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(bias, rng);
   }
 
-  /** \brief Retrieves a candidate randomly chosen by rank-based selection.
+  /**
+   * \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
    * This method accepts as a template parameter a name of a function
    * `double(double, double)` that will receive its first argument linearly
@@ -258,6 +266,11 @@ class Population : private std::vector<Candidate> {
    * at compile time, eliminating a function pointer lookup. A usual choice
    * for `fun` is `std::pow`.
    *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use rankSelect_v(double, Rng&) instead.
+   *
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
@@ -267,10 +280,53 @@ class Population : private std::vector<Candidate> {
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
-   * 
+   *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& NOINLINE rankSelect(double bias, Rng& rng = rng) {
+  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+    return rankSelect_two<const Candidate&, fun>(bias, rng);
+  }
+
+  /** \copybrief rankSelect(double, Rng&)
+   *
+   * Works like rankSelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  Candidate rankSelect_v(double bias, Rng& rng = rng) {
+    if(internal::is_exp<fun>::value)
+      return rankSelect_exp<Candidate>(bias, rng);
+    else
+      return rankSelect_two<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+  }
+
+  /** \copybrief rankSelect(double, Rng&)
+   *
+   * Works like rankSelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  Candidate rankSelect_v(double bias, Rng& rng = rng) {
+    return rankSelect_two<Candidate, fun>(bias, rng);
+  }
+
+  private:
+  template<class Ret, class Rng>
+  Ret NOINLINE rankSelect_exp(double bias, Rng& rng = rng) {
+    static thread_local std::uniform_real_distribution<double> rDist(0, 1);
+    double x = rDist(rng);
+    internal::read_lock lock(smp);
+    ensureSorted(lock);
+    if(x == 1)
+      return this->back();
+    else
+      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
+  }
+
+  template<class Ret, double (*fun)(double, double), class Rng = decltype(rng)>
+  Ret NOINLINE rankSelect_two(double bias, Rng& rng = rng) {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
@@ -288,34 +344,45 @@ class Population : private std::vector<Candidate> {
     return (*this)[iDist(rng)];
   }
 
-  private:
-  template<class Rng>
-  const Candidate& rankSelect_exp(double bias, Rng& rng = rng) {
-    static thread_local std::uniform_real_distribution<double> rDist(0, 1);
-    double x = rDist(rng);
-    internal::read_lock lock(smp);
-    ensureSorted(lock);
-    if(x == 1)
-      return this->back();
-    else
-      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
-  }
-
   public:
-  /** \brief Retrieves a candidate chosen using uniform random selection. */
+  /** \brief Retrieves a candidate chosen using uniform random selection.
+   *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use randomSelect_v(Rng&) const instead. */
+#ifdef DOXYGEN
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
+#else
+  template<class Rng = decltype(rng), class Ret = const Candidate&>
+  Ret NOINLINE randomSelect(Rng& rng = rng) const {
+#endif
     internal::read_lock lock(smp);
     std::uniform_int_distribution<size_t> dist{0, size() - 1};
     return (*this)[dist(rng)];
   }
 
-  /** \brief Randomly selects `k` different candidates. */
+  /** \copybrief randomSelect(Rng&) const
+   * \brief Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
+  Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
+    return randomSelect<Rng, Candidate>(rng);
+  }
+
+  /** \brief Randomly selects `k` different candidates.
+   *
+   * The returned \link RefPopulation \endlink remains valid until the
+   * original population is modified.  Therefore there is a risk of
+   * invalidating it in a multi-threaded program if another thread
+   * concurrently modifies the population. If your code allows this, use
+   * randomSelect_v(size_t, Rng&) const instead. */
 #ifdef DOXYGEN
+  template<class Rng = decltype(rng)>
   RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
 #else
-  Ref NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+  template<class Rng = decltype(rng), class Ret = Ref>
+  Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
 #endif
     internal::read_lock lock(smp);
     size_t sz = size();
@@ -328,10 +395,18 @@ class Population : private std::vector<Candidate> {
       idx[i] += i + d;
     }
     idx.resize(k);
-    Ref ret(k);
+    Ret ret(k);
     for(auto i : idx)
       ret.add((*this)[i]);
     return ret;
+  }
+
+  /** \copybrief randomSelect(size_t, Rng&) const
+   * \brief Works like randomSelect(size_t, Rng&) const but returns an independent
+   * Population. */
+  template<class Rng = decltype(rng)>
+  Population<Candidate> NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
+    return randomSelect<Rng, Population<Candidate>>(k, rng);
   }
 
   /** \brief Returns the best candidate of population.
@@ -339,10 +414,20 @@ class Population : private std::vector<Candidate> {
    * If more candidates have equal best fitness the returned reference may be
    * any of them.
    *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use best_v() instead.
+   *
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
+#ifdef DOXYGEN
   const Candidate& best() {
+#else
+  template<class Ret = const Candidate&>
+  Ret best() {
+#endif
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
     internal::read_lock lock(smp);
@@ -350,6 +435,12 @@ class Population : private std::vector<Candidate> {
       return std::vector<Candidate>::front();
     else
       return *std::min_element(begin(), end());
+  }
+
+  /** \copybrief best()
+   * \brief Works like best() but returns by value. */
+  Candidate best_v() {
+    return best<Candidate>();
   }
 
   /** \brief Returns the number of candidates in this population dominated by
@@ -376,9 +467,20 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Returns a nondominated subset of this population.
    *
+   * The returned \link RefPopulation \endlink remains valid until the
+   * original population is modified.  Therefore there is a risk of
+   * invalidating it in a multi-threaded program if another thread
+   * concurrently modifies the population. If your code allows this, use
+   * front_v() instead.
+   *
    * \param parallel controls parallelization using OpenMP (on by default) */
-  Population<Candidate> front(bool parallel = true) const {
-    Population<Candidate> ret{};
+#ifdef DOXYGEN
+  RefPopulation<Candidate> NOINLINE front(bool parallel = true) const {
+#else
+  template<class Ret = Ref>
+  Ret front(bool parallel = true) const {
+#endif
+    Ret ret{};
     internal::read_lock lock(smp);
     size_t sz = size();
     std::vector<char> dom(sz, 0);
@@ -393,6 +495,12 @@ class Population : private std::vector<Candidate> {
         ret.add((*this)[i]);
     }
     return ret;
+  }
+
+  /** \copybrief front()
+   * \brief Works like front() but returns an independent Population. */
+  Population<Candidate> NOINLINE front_v(bool parallel = true) const {
+    return front<Population<Candidate>>(parallel);
   }
 
 
@@ -450,8 +558,7 @@ class Population : private std::vector<Candidate> {
  * selection from an existing Population.
  *
  * This effectively allows to make a Population of references to Candidate,
- * e.g., to store the return value of Population::randomSelect(). <!-- FIXME
- * why won't Doxygen recognize Population::randomSelect(size_t, Rng&)? -->
+ * e.g., to store the return value of Population::randomSelect(size_t, Rng&) const.
  * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
  * like functions dependent on the existence of Candidate::operator< or
  * Candidate::operator<<. */

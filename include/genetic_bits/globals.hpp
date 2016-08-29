@@ -1,4 +1,4 @@
-/** \brief The gen namespace. */
+/** \brief The `gen` namespace. */
 namespace gen {
 
 /** \brief The default random number generator for Population::rankSelect().
