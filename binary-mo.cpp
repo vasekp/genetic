@@ -599,7 +599,7 @@ int main() {
   for(int gen = 0; gen < Config::nGen; gen++) {
 
     /* Find the nondominated subset and trim down do popSize */
-    Population nondom = pop.front_v();
+    auto nondom = pop.front();
     //std::cout << nondom.size();
     nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
         return a.fitness() == b.fitness();
@@ -608,7 +608,7 @@ int main() {
     //std::cout << " → " << nondom.size() << std::endl;
     size_t nd = nondom.size();
 
-    for(auto& c : nondom)
+    for(const Candidate& c : nondom)
       CandidateFactory::hit(c.getOrigin());
 
     /* Top up to popSize2 candidates, precomputing fitnesses */
@@ -617,11 +617,11 @@ int main() {
     pop2.add(Config::popSize2 - nd, [&]() -> const Candidate { return cf.getNew(); }, true);
 
     /* Merge the nondominated subset of the previous population */
-    pop2.add(std::move(nondom));
+    pop2.add(nondom);
     pop = std::move(pop2);
 
     /* Summarize */
-    nondom = pop.front_v();
+    nondom = pop.front();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       nondom.size() << " nondominated";
     if(nondom.size() > 0) {
@@ -655,12 +655,12 @@ int main() {
   CandidateFactory::dumpWeights(std::cout);
 
   /* Delete candidates with duplicate fitnesses */
-  Population nondom = pop.front_v();
+  auto nondom = pop.front();
   std::cout << std::endl << nondom.size() << " nondominated candidates, ";
   nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
       return a.fitness() == b.fitness();
     });
   std::cout << nondom.size() << " unique fitnesses:" << std::endl;
-  for(auto& c : nondom)
+  for(const Candidate& c : nondom)
     std::cout << c.fitness() << ' ' << c << std::endl;
 }

@@ -152,6 +152,16 @@ class Population : private std::vector<Candidate> {
     return add(static_cast<std::vector<Candidate>&&>(pop));
   }
 
+  /** \brief Copies all candidates from a gen::RefPopulation. */
+#ifdef DOXYGEN
+  void add(const RefPopulation<Candidate>& pop) {
+#else
+  template<bool is_ref = std::is_same<_Candidate, const Candidate>::value>
+  typename std::enable_if<!is_ref, void>::type add(const Ref& pop) {
+#endif
+    add(pop.begin(), pop.end());
+  }
+
   /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample.
    *
@@ -203,7 +213,7 @@ class Population : private std::vector<Candidate> {
    * preferred in survival.
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const _Candidate&, const _Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::write_lock lock(smp);
     if(size() <= minSize)
       return;
@@ -247,11 +257,11 @@ class Population : private std::vector<Candidate> {
    * 
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+  const _Candidate& rankSelect(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const Candidate&>(bias, rng);
+      return rankSelect_exp<const _Candidate&>(bias, rng);
     else
-      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<const _Candidate&, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   /**
@@ -283,8 +293,8 @@ class Population : private std::vector<Candidate> {
    *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng) {
-    return rankSelect_two<const Candidate&, fun>(bias, rng);
+  const _Candidate& rankSelect(double bias, Rng& rng = rng) {
+    return rankSelect_two<const _Candidate&, fun>(bias, rng);
   }
 
   /** \copybrief rankSelect(double, Rng&)
@@ -294,11 +304,11 @@ class Population : private std::vector<Candidate> {
    *
    * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  Candidate rankSelect_v(double bias, Rng& rng = rng) {
+  _Candidate rankSelect_v(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<Candidate>(bias, rng);
+      return rankSelect_exp<_Candidate>(bias, rng);
     else
-      return rankSelect_two<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<_Candidate, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   /** \copybrief rankSelect(double, Rng&)
@@ -308,8 +318,8 @@ class Population : private std::vector<Candidate> {
    *
    * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  Candidate rankSelect_v(double bias, Rng& rng = rng) {
-    return rankSelect_two<Candidate, fun>(bias, rng);
+  _Candidate rankSelect_v(double bias, Rng& rng = rng) {
+    return rankSelect_two<_Candidate, fun>(bias, rng);
   }
 
   private:
@@ -355,7 +365,7 @@ class Population : private std::vector<Candidate> {
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
 #else
-  template<class Rng = decltype(rng), class Ret = const Candidate&>
+  template<class Rng = decltype(rng), class Ret = const _Candidate&>
   Ret NOINLINE randomSelect(Rng& rng = rng) const {
 #endif
     internal::read_lock lock(smp);
@@ -366,8 +376,8 @@ class Population : private std::vector<Candidate> {
   /** \copybrief randomSelect(Rng&) const
    * \brief Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
-  Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
-    return randomSelect<Rng, Candidate>(rng);
+  _Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
+    return randomSelect<Rng, _Candidate>(rng);
   }
 
   /** \brief Randomly selects `k` different candidates.
@@ -379,7 +389,7 @@ class Population : private std::vector<Candidate> {
    * randomSelect_v(size_t, Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+  RefPopulation<_Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
   Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
@@ -405,8 +415,8 @@ class Population : private std::vector<Candidate> {
    * \brief Works like randomSelect(size_t, Rng&) const but returns an independent
    * Population. */
   template<class Rng = decltype(rng)>
-  Population<Candidate> NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
-    return randomSelect<Rng, Population<Candidate>>(k, rng);
+  Population<_Candidate> NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
+    return randomSelect<Rng, Population<_Candidate>>(k, rng);
   }
 
   /** \brief Returns the best candidate of population.
@@ -423,9 +433,9 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
 #ifdef DOXYGEN
-  const Candidate& best() {
+  const _Candidate& best() {
 #else
-  template<class Ret = const Candidate&>
+  template<class Ret = const _Candidate&>
   Ret best() {
 #endif
     static_assert(internal::comparable<_FitnessType>(0),
@@ -439,13 +449,13 @@ class Population : private std::vector<Candidate> {
 
   /** \copybrief best()
    * \brief Works like best() but returns by value. */
-  Candidate best_v() {
-    return best<Candidate>();
+  _Candidate best_v() {
+    return best<_Candidate>();
   }
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const Candidate& c, const Population<Candidate>& pop) {
+  friend size_t operator<< (const _Candidate& c, const Population<Candidate>& pop) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)
@@ -456,7 +466,7 @@ class Population : private std::vector<Candidate> {
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const Population<Candidate>& pop, const Candidate& c) {
+  friend size_t operator<< (const Population<Candidate>& pop, const _Candidate& c) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)
@@ -499,8 +509,8 @@ class Population : private std::vector<Candidate> {
 
   /** \copybrief front()
    * \brief Works like front() but returns an independent Population. */
-  Population<Candidate> NOINLINE front_v(bool parallel = true) const {
-    return front<Population<Candidate>>(parallel);
+  Population<_Candidate> NOINLINE front_v(bool parallel = true) const {
+    return front<Population<_Candidate>>(parallel);
   }
 
 
@@ -525,7 +535,7 @@ class Population : private std::vector<Candidate> {
         "This method requires the fitness type to be convertible to double.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock(smp);
-    for(const Candidate &c : *this) {
+    for(const _Candidate &c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;
@@ -561,7 +571,17 @@ class Population : private std::vector<Candidate> {
  * e.g., to store the return value of Population::randomSelect(size_t, Rng&) const.
  * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
  * like functions dependent on the existence of Candidate::operator< or
- * Candidate::operator<<. */
+ * Candidate::operator<<.
+ *
+ * Note that the elements of a \link RefPopulation \endlink are in fact
+ * [`std::reference_wrapper`](http://en.cppreference.com/w/cpp/utility/functional/
+ * reference_wrapper)`<const Candidate>`. This can implicitly be converted
+ * to `const Candidate&` but some other uses may need to be modified. Most
+ * importantly, the dot operator can not be overloaded within C++11 so
+ * `x.fitness()` won't work for `x` taken from a \link RefPopulation \endlink.
+ * If this is needed, convert explicitly to `const Candidate&` or use
+ * [`std::reference_wrapper::get()`](http://en.cppreference.com/w/cpp/utility/
+ * functional/reference_wrapper/get). */
 template<class Candidate>
 using RefPopulation = typename Population<Candidate>::Ref;
 
