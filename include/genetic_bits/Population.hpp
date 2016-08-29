@@ -200,9 +200,9 @@ class Population : private std::vector<Candidate> {
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+    internal::write_lock lock(smp);
     if(size() <= minSize)
       return;
-    internal::write_lock lock(smp);
     if(randomize)
       shuffle(rng);
     size_t sz = size();
@@ -238,7 +238,7 @@ class Population : private std::vector<Candidate> {
    * 
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& NOINLINE rankSelect(float bias, Rng& rng = rng) {
+  const Candidate& NOINLINE rankSelect(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
       return rankSelect_exp(bias, rng);
     else
