@@ -276,6 +276,8 @@ class Population : private std::vector<Candidate> {
     static thread_local std::vector<double> probs{};
     internal::read_lock lock(smp);
     size_t sz = size();
+    if(sz == 0)
+      throw std::out_of_range("rankSelect(): Population is empty.");
     if(sz != last_sz) {
       probs.clear();
       probs.reserve(sz);
@@ -295,10 +297,13 @@ class Population : private std::vector<Candidate> {
     double x = rDist(rng);
     internal::read_lock lock(smp);
     ensureSorted(lock);
+    size_t sz = size();
+    if(sz == 0)
+      throw std::out_of_range("rankSelect(): Population is empty.");
     if(x == 1)
       return this->back();
     else
-      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
+      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*sz)];
   }
 
   public:
@@ -306,11 +311,17 @@ class Population : private std::vector<Candidate> {
   template<class Rng = decltype(rng)>
   const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
     internal::read_lock lock(smp);
-    std::uniform_int_distribution<size_t> dist{0, size() - 1};
+    size_t sz = size();
+    if(sz == 0)
+      throw std::out_of_range("randomSelect(): Population is empty.");
+    std::uniform_int_distribution<size_t> dist{0, sz - 1};
     return (*this)[dist(rng)];
   }
 
-  /** \brief Randomly selects `k` different candidates. */
+  /** \brief Randomly selects `k` different candidates.
+   *
+   * If `k < size()`, the whole population is returned.
+   */
   template<class Rng = decltype(rng)>
 #ifdef DOXYGEN
   RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
@@ -319,8 +330,9 @@ class Population : private std::vector<Candidate> {
 #endif
     internal::read_lock lock(smp);
     size_t sz = size();
+    k = std::min(k, sz);
     std::vector<size_t> idx(sz);
-    /* Fisher-Yates without initialization! */
+    /* Fisher-Yates intentionally without initialization! */
     for(size_t i = 0; i < k; i++) {
       size_t d = rng() % (sz - i), j = i+d;
       std::swap(idx[i], idx[j]);
@@ -346,6 +358,8 @@ class Population : private std::vector<Candidate> {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
     internal::read_lock lock(smp);
+    if(this->empty())
+      throw std::out_of_range("best(): Population is empty.");
     if(sorted)
       return std::vector<Candidate>::front();
     else
@@ -415,6 +429,8 @@ class Population : private std::vector<Candidate> {
   Stat stat() const {
     static_assert(std::is_convertible<_FitnessType, double>::value,
         "This method requires the fitness type to be convertible to double.");
+    if(this->empty())
+      throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock(smp);
     for(const Candidate &c : *this) {
