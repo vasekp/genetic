@@ -8,10 +8,20 @@ class Population : private std::vector<Candidate> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
+  /* If this is a reference population of another, Candidate is actually
+   * std::reference_wrapper<const _Candidate>. This removes the wrapper and
+   * the const, so _Candidate refers to the template parameter of the original
+   * class. Otherwise _Candidate = Candidate. This is later used to detect
+   * whether we're a reference or not. It's guaranteed that Candidate& can be
+   * cast to _Candidate& in any case. Also it's guaranteed that
+   * Population<C>::Ref::Ref = Population<C>::Ref which comes in handy in
+   * chaining selection functions. */
   typedef decltype(internal::unwrap(std::declval<Candidate>())) _Candidate;
+  // Let that not confuse poor Doxygen.
 #ifdef DOXYGEN
 #define _Candidate Candidate
 #endif
+
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
   typedef std::vector<Candidate> Base;
@@ -19,15 +29,21 @@ class Population : private std::vector<Candidate> {
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
 
-  public:
+
+public:
   using Base::begin;
   using Base::end;
   using Base::size;
   using Base::clear;
   using Base::operator[];
 
-  /** \see RefPopulation. */
+  /** \brief The reference type of this Population.
+   * 
+   * \see RefPopulation. */
   typedef Population<std::reference_wrapper<const _Candidate>> Ref;
+
+  friend class Population<std::reference_wrapper<const _Candidate>>;
+  friend class Population<_Candidate>;
 
   /** \brief Creates an empty population. */
   Population() = default;
@@ -49,14 +65,40 @@ class Population : private std::vector<Candidate> {
     add(count, src, precompute, parallel);
   }
 
-  /* The Big Four: trivial but we need them because the semaphore can't be 
-   * default copied or moved */
+  /* The copy and move constructors: trivial but we need explicit definition
+   * because the semaphore can't be default copied or moved */
 
   /** \brief The copy constructor. */
   Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
 
   /** \brief The move constructor. */
   Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
+
+  /** \brief Initializes a population as a copy of a gen::RefPopulation. */
+#ifdef DOXYGEN
+  Population(const RefPopulation& _p) {
+#else
+  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
+  Population(typename std::enable_if<!is_ref, const Ref&>::type _p) {
+#endif
+    Base::insert(end(), _p.begin(), _p.end());
+    sorted = _p.sorted;
+  }
+
+  /** \brief Initializes a reference Population from a whole Population.
+   * Exposed only for instances of gen::RefPopulation. */
+#ifdef DOXYGEN
+  Population(const Population<Candidate>&) {
+#else
+  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
+  Population(typename std::enable_if<is_ref, const Population<_Candidate>&>::type _p) {
+#endif
+    Base::insert(end(), _p.begin(), _p.end());
+    sorted = _p.sorted;
+  }
+
+  /* The copy and move assignments: trivial but we need explicit definition
+   * semaphore can't be default copied or moved */
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
@@ -70,6 +112,20 @@ class Population : private std::vector<Candidate> {
   Population& operator=(Population&& _p) {
     internal::write_lock lock(smp);
     Base::operator=(std::move(_p));
+    sorted = _p.sorted;
+    return *this;
+  }
+
+  /** \brief Copy assignment from a gen::RefPopulation. */
+#ifdef DOXYGEN
+  Population& operator=(const RefPopulation<Candidate>& _p) {
+#else
+  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
+  typename std::enable_if<!is_ref, Population&>::type operator=(const Ref& _p) {
+#endif
+    internal::write_lock lock(smp);
+    Base::clear();
+    Base::insert(end(), _p.begin(), _p.end());
     sorted = _p.sorted;
     return *this;
   }
@@ -130,7 +186,6 @@ class Population : private std::vector<Candidate> {
   template<class InputIt>
   void add(InputIt first, InputIt last) {
     internal::write_lock lock(smp);
-    Base::reserve(size() + std::distance(first, last));
     Base::insert(end(), first, last);
     sorted = false;
   }
@@ -160,6 +215,17 @@ class Population : private std::vector<Candidate> {
 #else
   template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
   typename std::enable_if<!is_ref, void>::type add(const Ref& pop) {
+#endif
+    add(pop.begin(), pop.end());
+  }
+
+  /** \brief Takes reference to all candidates from another Population.
+   * Exposed only for instances of gen::RefPopulation. */
+#ifdef DOXYGEN
+  void add(const Population<Candidate>&) {
+#else
+  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
+  typename std::enable_if<is_ref, void>::type add(const Population<_Candidate>& pop) {
 #endif
     add(pop.begin(), pop.end());
   }
@@ -324,7 +390,7 @@ class Population : private std::vector<Candidate> {
     return rankSelect_two<_Candidate, fun>(bias, rng);
   }
 
-  private:
+private:
   template<class Ret, class Rng>
   Ret NOINLINE rankSelect_exp(double bias, Rng& rng = rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
@@ -356,7 +422,7 @@ class Population : private std::vector<Candidate> {
     return (*this)[iDist(rng)];
   }
 
-  public:
+public:
   /** \brief Retrieves a candidate chosen using uniform random selection.
    *
    * The returned reference remains valid until the population is modified.
@@ -573,7 +639,9 @@ class Population : private std::vector<Candidate> {
  * e.g., to store the return value of Population::randomSelect(size_t, Rng&) const.
  * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
  * like functions dependent on the existence of Candidate::operator< or
- * Candidate::operator<<.
+ * Candidate::operator<<. Most functions can be called on a RefPopulation and
+ * it can be converted from and to normal population (taking references and
+ * creating copies of all elements, respectively).
  *
  * Note that the elements of a \link RefPopulation \endlink are in fact
  * [`std::reference_wrapper`](http://en.cppreference.com/w/cpp/utility/functional/
