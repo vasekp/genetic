@@ -38,7 +38,7 @@ namespace internal {
   /* Helper for detecting if a Candidate is a class derived from gen::Candidate or a
    * reference_wrapper of some */
   template<typename T>
-  T unwrap(std::reference_wrapper<T>);
+  typename std::remove_const<T>::type unwrap(std::reference_wrapper<T>);
 
   template<typename T>
   T unwrap(T);

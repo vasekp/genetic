@@ -14,15 +14,17 @@ class Population : private std::vector<Candidate> {
 #endif
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
+  typedef std::vector<Candidate> Base;
+
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
 
   public:
-  using std::vector<Candidate>::begin;
-  using std::vector<Candidate>::end;
-  using std::vector<Candidate>::size;
-  using std::vector<Candidate>::clear;
-  using std::vector<Candidate>::operator[];
+  using Base::begin;
+  using Base::end;
+  using Base::size;
+  using Base::clear;
+  using Base::operator[];
 
   /** \see RefPopulation. */
   typedef Population<std::reference_wrapper<const _Candidate>> Ref;
@@ -33,7 +35,7 @@ class Population : private std::vector<Candidate> {
   /** \brief Creates an empty population but preallocate space for count
    * candidates. */
   Population(size_t count) {
-    this->reserve(count);
+    Base::reserve(count);
   }
 
   /** \brief Creates a population of size `count` whose candidates are results
@@ -51,15 +53,15 @@ class Population : private std::vector<Candidate> {
    * default copied or moved */
 
   /** \brief The copy constructor. */
-  Population(const Population& _p): std::vector<Candidate>(_p), sorted(_p.sorted) { }
+  Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
 
   /** \brief The move constructor. */
-  Population(Population&& _p): std::vector<Candidate>(std::move(_p)), sorted(_p.sorted) { }
+  Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
     internal::write_lock lock(smp);
-    std::vector<Candidate>::operator=(_p);
+    Base::operator=(_p);
     sorted = _p.sorted;
     return *this;
   }
@@ -67,22 +69,22 @@ class Population : private std::vector<Candidate> {
   /** \brief Move assignment operator. */
   Population& operator=(Population&& _p) {
     internal::write_lock lock(smp);
-    std::vector<Candidate>::operator=(std::move(_p));
+    Base::operator=(std::move(_p));
     sorted = _p.sorted;
     return *this;
   }
 
   /** \brief Adds a new candidate. */
-  void add(const Candidate& c) {
+  void add(const _Candidate& c) {
     internal::write_lock lock(smp);
-    this->push_back(c);
+    Base::push_back(c);
     sorted = false;
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
     internal::write_lock lock(smp);
-    this->push_back(std::forward<Candidate>(c));
+    Base::push_back(c);
     sorted = false;
   }
 
@@ -101,7 +103,7 @@ class Population : private std::vector<Candidate> {
   template<class Source>
   void NOINLINE add(size_t count, Source src, bool precompute = false, bool parallel = true) {
     internal::write_lock lock(smp);
-    this->reserve(size() + count);
+    Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
       std::vector<Candidate> tmp{};
@@ -114,7 +116,7 @@ class Population : private std::vector<Candidate> {
         tmp.push_back(c);
       }
       #pragma omp critical
-      this->insert(end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
+      Base::insert(end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
     }
     sorted = false;
   }
@@ -128,35 +130,35 @@ class Population : private std::vector<Candidate> {
   template<class InputIt>
   void add(InputIt first, InputIt last) {
     internal::write_lock lock(smp);
-    this->reserve(size() + std::distance(first, last));
-    this->insert(end(), first, last);
+    Base::reserve(size() + std::distance(first, last));
+    Base::insert(end(), first, last);
     sorted = false;
   }
 
   /** \brief Moves all candidates from a vector of `Candidate`s. */
   void NOINLINE add(std::vector<Candidate>&& vec) {
     internal::write_lock lock(smp);
-    this->reserve(size() + vec.size());
-    this->insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
+    Base::reserve(size() + vec.size());
+    Base::insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
     vec.clear();
     sorted = false;
   }
 
   /** \brief Copies all candidates from another Population. */
   void add(const Population<Candidate>& pop) {
-    return add(static_cast<const std::vector<Candidate>&>(pop));
+    add(static_cast<const Base&>(pop));
   }
 
   /** \brief Moves all candidates from another Population. */
   void add(Population<Candidate>&& pop) {
-    return add(static_cast<std::vector<Candidate>&&>(pop));
+    add(static_cast<Base&&>(pop));
   }
 
   /** \brief Copies all candidates from a gen::RefPopulation. */
 #ifdef DOXYGEN
   void add(const RefPopulation<Candidate>& pop) {
 #else
-  template<bool is_ref = std::is_same<_Candidate, const Candidate>::value>
+  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
   typename std::enable_if<!is_ref, void>::type add(const Ref& pop) {
 #endif
     add(pop.begin(), pop.end());
@@ -177,7 +179,7 @@ class Population : private std::vector<Candidate> {
       return;
     ensureSorted(lock);
     const Candidate& dummy = *begin();  // needed by resize() if size() < newSize which can't happen
-    this->resize(newSize, dummy);       // (otherwise we would need a default constructor)
+    Base::resize(newSize, dummy);       // (otherwise we would need a default constructor)
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -193,7 +195,7 @@ class Population : private std::vector<Candidate> {
       return;
     shuffle(rng);
     const Candidate& dummy = *begin();  // see rankTrim()
-    this->resize(newSize, dummy);
+    Base::resize(newSize, dummy);
   }
 
   /** \brief Reduces the population by selective removal of candidates.
@@ -223,7 +225,7 @@ class Population : private std::vector<Candidate> {
     for(size_t i = 0; i < sz - 1; i++)
       for(size_t j = sz - 1; j > i; j--)
         if(test((*this)[i], (*this)[j])) {
-          this->erase(begin() + j);
+          Base::erase(begin() + j);
           if(--sz <= minSize)
             return;
         }
@@ -330,7 +332,7 @@ class Population : private std::vector<Candidate> {
     internal::read_lock lock(smp);
     ensureSorted(lock);
     if(x == 1)
-      return this->back();
+      return Base::back();
     else
       return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*size())];
   }
@@ -363,7 +365,7 @@ class Population : private std::vector<Candidate> {
    * allows this, use randomSelect_v(Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  const Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
+  const _Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = const _Candidate&>
   Ret NOINLINE randomSelect(Rng& rng = rng) const {
@@ -433,7 +435,7 @@ class Population : private std::vector<Candidate> {
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied. */
 #ifdef DOXYGEN
-  const _Candidate& best() {
+  const Candidate& best() {
 #else
   template<class Ret = const _Candidate&>
   Ret best() {
@@ -442,7 +444,7 @@ class Population : private std::vector<Candidate> {
         "This method requires the fitness type to implement an operator<.");
     internal::read_lock lock(smp);
     if(sorted)
-      return std::vector<Candidate>::front();
+      return Base::front();
     else
       return *std::min_element(begin(), end());
   }
@@ -458,7 +460,7 @@ class Population : private std::vector<Candidate> {
   friend size_t operator<< (const _Candidate& c, const Population<Candidate>& pop) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(auto& cmp : pop)
+    for(const _Candidate& cmp : pop)
       if(c << cmp)
         cnt++;
     return cnt;
@@ -469,7 +471,7 @@ class Population : private std::vector<Candidate> {
   friend size_t operator<< (const Population<Candidate>& pop, const _Candidate& c) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(auto& cmp : pop)
+    for(const _Candidate& cmp : pop)
       if(cmp << c)
         cnt++;
     return cnt;
