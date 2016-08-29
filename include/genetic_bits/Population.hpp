@@ -50,7 +50,7 @@ public:
 
   /** \brief Creates an empty population but preallocate space for count
    * candidates. */
-  Population(size_t count) {
+  explicit Population(size_t count) {
     Base::reserve(count);
   }
 
@@ -61,7 +61,7 @@ public:
    *
    * \see add(size_t, Source, bool, bool) */
   template<class Source>
-  Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
+  explicit Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
     add(count, src, precompute, parallel);
   }
 
@@ -76,10 +76,10 @@ public:
 
   /** \brief Initializes a population as a copy of a gen::RefPopulation. */
 #ifdef DOXYGEN
-  Population(const RefPopulation& _p) {
+  explicit Population(const RefPopulation<Candidate>& _p) {
 #else
   template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  Population(typename std::enable_if<!is_ref, const Ref&>::type _p) {
+  explicit Population(typename std::enable_if<!is_ref, const Ref&>::type _p) {
 #endif
     Base::insert(end(), _p.begin(), _p.end());
     sorted = _p.sorted;
@@ -88,10 +88,10 @@ public:
   /** \brief Initializes a reference Population from a whole Population.
    * Exposed only for instances of gen::RefPopulation. */
 #ifdef DOXYGEN
-  Population(const Population<Candidate>&) {
+  explicit Population(const Population<Candidate>&) {
 #else
   template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  Population(typename std::enable_if<is_ref, const Population<_Candidate>&>::type _p) {
+  explicit Population(typename std::enable_if<is_ref, const Population<_Candidate>&>::type _p) {
 #endif
     Base::insert(end(), _p.begin(), _p.end());
     sorted = _p.sorted;
