@@ -13,9 +13,7 @@ class Population : private std::vector<Candidate> {
    * the const, so _Candidate refers to the template parameter of the original
    * class. Otherwise _Candidate = Candidate. This is later used to detect
    * whether we're a reference or not. It's guaranteed that Candidate& can be
-   * cast to _Candidate& in any case. Also it's guaranteed that
-   * Population<C>::Ref::Ref = Population<C>::Ref which comes in handy in
-   * chaining selection functions. */
+   * cast to _Candidate& in any case. */
   typedef decltype(internal::unwrap(std::declval<Candidate>())) _Candidate;
   // Let that not confuse poor Doxygen.
 #ifdef DOXYGEN
@@ -37,9 +35,20 @@ public:
   using Base::clear;
   using Base::operator[];
 
-  /** \brief The reference type of this Population.
-   * 
-   * \see RefPopulation. */
+  /** \copybrief gen::RefPopulation
+   *
+   * Population::Ref can be used as short for gen::RefPopulation<Candidate> if
+   * Population is defined elsewhere to be `gen::Population<Candidate>`.
+   *
+   * This is the return type of functions that return a subset of an existing
+   * Population by reference. For convenience, objects of this type can be assigned to a
+   * `Population<Candidate>`. Also, it's guaranteed that Population::Ref::Ref is
+   * identical to Population::Ref, which makes it convenient to chain
+   * selection function, e.g. \link randomSelect(size_t, Rng&) const `pop.randomSelect(5)`
+   * \endlink`.front().randomSelect()` for
+   * a simple tournament selection.
+   *
+   * \see RefPopulation for more discussion. */
   typedef Population<std::reference_wrapper<const _Candidate>> Ref;
 
   friend class Population<std::reference_wrapper<const _Candidate>>;
@@ -57,9 +66,7 @@ public:
   /** \brief Creates a population of size `count` whose candidates are results
    * of calls to the source function `src`.
    *
-   * For discussion about the parameters see add(size_t, Source, bool, bool).
-   *
-   * \see add(size_t, Source, bool, bool) */
+   * \see add(size_t, Source, bool, bool) for discussion about the parameters. */
   template<class Source>
   explicit Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
     add(count, src, precompute, parallel);
@@ -457,7 +464,7 @@ public:
    * randomSelect_v(size_t, Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  RefPopulation<_Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+  RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
   Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
@@ -639,7 +646,7 @@ public:
  * e.g., to store the return value of Population::randomSelect(size_t, Rng&) const.
  * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
  * like functions dependent on the existence of Candidate::operator< or
- * Candidate::operator<<. Most functions can be called on a RefPopulation and
+ * Candidate::operator<<. Most functions can be called on a `RefPopulation` and
  * it can be converted from and to normal population (taking references and
  * creating copies of all elements, respectively).
  *
@@ -651,7 +658,9 @@ public:
  * `x.fitness()` won't work for `x` taken from a \link RefPopulation \endlink.
  * If this is needed, convert explicitly to `const Candidate&` or use
  * [`std::reference_wrapper::get()`](http://en.cppreference.com/w/cpp/utility/
- * functional/reference_wrapper/get). */
+ * functional/reference_wrapper/get).
+ *
+ * \see Population::Ref */
 template<class Candidate>
 using RefPopulation = typename Population<Candidate>::Ref;
 
