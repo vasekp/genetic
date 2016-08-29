@@ -56,7 +56,12 @@ class Candidate {
   protected:
   /** \brief The internal fitness computation, called the first time this
    * candidate's fitness() is queried. Every derived class must implement
-   * this routine. */
+   * this routine.
+   *
+   * In rare occasions it may happen that two threads ask to calculate a
+   * Candidate's fitness simultaneously. This function must be designed
+   * such that this causes no problem and must unconditionally return the
+   * same value for the same input. */
   virtual Fitness computeFitness() const = 0;
 }; // class Candidate
 
