@@ -272,6 +272,40 @@ public:
   }
 
   /** \brief Reduces the population by selective removal of candidates.
+   *
+   * Candidates are tested against a given predicate. If a candidate `c`
+   * satisfies `pred(c)` it is removed from the population. A minimum number
+   * of candidates can be set; if so, the procedure stops when enough
+   * candidates have been removed to satisfy this bound.
+   *
+   * \param test a boolean function accepting a `const Candidate` reference.
+   * If the return value is `true` the candidate is removed from the
+   * population.
+   * \param minSize a minimum number of candidates to be kept if possible. If
+   * zero (the default value), all candidates satisfying the predicate are
+   * removed.
+   * \param randomize whether to randomly shuffle the sample prior to pruning
+   * (this is the default). If `false` then earlier appearing candidates are
+   * preferred in survival.
+   * \param rng the random number generator, or gen::rng by default. Ignored
+   * if `randomize` is `false`. */
+  template<class Rng = decltype(rng)>
+  void prune(bool (*test)(const _Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+    internal::write_lock lock(smp);
+    if(size() <= minSize)
+      return;
+    if(randomize)
+      shuffle(rng);
+    size_t sz = size();
+    for(size_t i = 0; i < sz - 1; i++)
+      if(test((*this)[i])) {
+        Base::erase(begin() + i);
+        if(--sz <= minSize)
+          return;
+      }
+  }
+
+  /** \brief Reduces the population by selective removal of candidates.
    * 
    * Candidates are tested for similarity according to a provided crierion
    * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
@@ -286,7 +320,8 @@ public:
    * \param randomize whether to randomly shuffle the sample prior to pruning
    * (this is the default). If `false` then earlier appearing candidates are
    * preferred in survival.
-   * \param rng the random number generator, or gen::rng by default. */
+   * \param rng the random number generator, or gen::rng by default. Ignored
+   * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const _Candidate&, const _Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::write_lock lock(smp);
