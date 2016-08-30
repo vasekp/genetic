@@ -58,12 +58,12 @@ public:
    * as expected, see add(Container&).
    *
    * It is guaranteed that Population::Ref::Ref is identical to
-   * Population::Ref, which makes it convenient to chain selection function,
+   * Population::Ref, which makes it convenient to chain selection functions,
    * e.g.
    * ```
    * pop.randomSelect(5).front().randomSelect()
    * ```
-   * for a simple tournament selection.
+   * for a simple multi-objective tournament selection.
    *
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
