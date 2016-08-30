@@ -22,14 +22,14 @@ namespace Config {
 #ifdef DEBUG
   const int nGen = 100;
 #else
-  const int nGen = 1000;
+  const int nGen = 2000;
 #endif
 
   const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pDeleteUniform = 0.10;  // probability of single gate deletion 
 
-  const float heurFactor = 0.01;      // how much prior success of genetic ops should influence future choices
+  const float heurFactor = 100;       // how much prior success of genetic ops should influence future choices
 
   const float pControl = 0.25;        // how much each bit is likely to be a control bit at gate creation
 
@@ -265,7 +265,7 @@ class CandidateFactory {
 
   static void normalizeWeights() {
     unsigned total = std::accumulate(weights.begin(), weights.end(), 0);
-    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total;
+    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total * weights.size() * Config::nGen;
     for(auto& w : weights)
       w *= factor;
   }
@@ -572,7 +572,7 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
     { &CandidateFactory::mAddSlice,          "AddSlice" },
     { &CandidateFactory::mAddPairs,          "AddPairs" },
     { &CandidateFactory::mDeleteSlice,       "DelSlice" },
-    { &CandidateFactory::mDeleteSliceShort,  "DelShort" },
+    //{ &CandidateFactory::mDeleteSliceShort,  "DelShort" },
     //{ &CandidateFactory::mDeleteUniform,     "DelUnif" },
     //{ &CandidateFactory::mSplitSwap2,        "SpltSwp2"  },
     { &CandidateFactory::mSplitSwap4,        "SpltSwp4"  },
