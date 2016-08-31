@@ -618,6 +618,7 @@ private:
     static thread_local size_t last_mod{(size_t)-1};
     internal::read_lock lock(smp);
     size_t sz = size();
+    assert_double();
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): Population is empty.");
     if(last_mod != smp.get_mod_cnt()) {
@@ -719,8 +720,7 @@ public:
   template<class Ret = const Candidate&>
   Ret NOINLINE best() {
 #endif
-    static_assert(internal::comparable<_FitnessType>(0),
-        "This method requires the fitness type to implement an operator<.");
+    assert_comparable();
     internal::read_lock lock(smp);
     if(this->empty())
       throw std::out_of_range("best(): Population is empty.");
@@ -813,8 +813,7 @@ public:
    * \see Stat
    */
   Stat stat() const {
-    static_assert(std::is_convertible<_FitnessType, double>::value,
-        "This method requires the fitness type to be convertible to double.");
+    assert_double();
     if(this->empty())
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
@@ -831,8 +830,7 @@ public:
 
 private:
   void ensureSorted(internal::rw_lock& lock) {
-    static_assert(internal::comparable<_FitnessType>(0),
-        "This method requires the fitness type to implement an operator<.");
+    assert_comparable();
     if(!sorted) {
       internal::upgrade_lock up(lock);
       std::sort(Base::begin(), Base::end());
@@ -844,6 +842,16 @@ private:
   void shuffle(Rng& rng) {
     std::shuffle(Base::begin(), Base::end(), rng);
     sorted = false;
+  }
+
+  static void assert_double() {
+    static_assert(std::is_convertible<_FitnessType, double>::value,
+        "This method requires the fitness type to be convertible to double.");
+  }
+
+  static void assert_comparable() {
+    static_assert(internal::comparable<_FitnessType>(0),
+        "This method requires the fitness type to implement an operator<.");
   }
 }; // class Population
 
