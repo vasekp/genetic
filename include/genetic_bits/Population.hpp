@@ -2,57 +2,68 @@ namespace gen {
 
 /** \brief The Population template.
  *
- * Requires a `Candidate` class derived from gen::Candidate. */
-template<class Candidate>
-class Population : private std::vector<Candidate> {
+ * \param Candidate the class describing individual members of this
+ * population. Must be derived from gen::Candidate.
+ * \param Tag an optional supplement class to accompany each candidate. Used
+ * for internal purposes. This does not enter iterations over this population
+ * and is not duplicated when copies or references are taken.
+ * \param ref if set to `true`, this is a reference population. See
+ * Population::Ref for more details. */
+template<class Candidate, class Tag = internal::empty, bool ref = false>
+class Population : private std::vector<internal::Tagged<Candidate, Tag, ref>> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
-  /* If this is a reference population of another, Candidate is actually
-   * std::reference_wrapper<const _Candidate>. This removes the wrapper and
-   * the const, so _Candidate refers to the template parameter of the original
-   * class. Otherwise _Candidate = Candidate. This is later used to detect
-   * whether we're a reference or not. It's guaranteed that Candidate& can be
-   * cast to _Candidate& in any case. */
-  typedef decltype(internal::unwrap(std::declval<Candidate>())) _Candidate;
-  // Let that not confuse poor Doxygen.
-#ifdef DOXYGEN
-#define _Candidate Candidate
-#endif
-
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
-  typedef std::vector<Candidate> Base;
+  typedef std::vector<internal::Tagged<Candidate, Tag, ref>> Base;
+
+  typedef internal::cast_iterator<const Candidate, typename Base::const_iterator> CastIter;
 
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
 
-
 public:
-  using Base::begin;
-  using Base::end;
   using Base::size;
   using Base::clear;
   using Base::operator[];
 
-  /** \copybrief gen::RefPopulation
-   *
-   * Population::Ref can be used as short for gen::RefPopulation<Candidate> if
-   * Population is defined elsewhere to be `gen::Population<Candidate>`.
+#ifndef DOXYGEN
+  CastIter begin() const {
+    return CastIter(Base::cbegin());
+  }
+
+  CastIter end() const {
+    return CastIter(Base::cend());
+  }
+#endif
+
+  /** \brief A corresponding "reference population", a helper type for
+   * functions returning a selection from an existing Population.
    *
    * This is the return type of functions that return a subset of an existing
-   * Population by reference. For convenience, objects of this type can be assigned to a
-   * `Population<Candidate>`. Also, it's guaranteed that Population::Ref::Ref is
-   * identical to Population::Ref, which makes it convenient to chain
-   * selection function, e.g. \link randomSelect(size_t, Rng&) const `pop.randomSelect(5)`
-   * \endlink`.front().randomSelect()` for
-   * a simple tournament selection.
+   * Population by reference as it holds its members by reference rather than
+   * by value. Internally it is a different Population specialization with a
+   * matching Candidate type, so the same functions including adding or
+   * erasing can be called on it despite its temporary nature and assignments
+   * between Population and Population::Ref objects are allowed and behave
+   * as expected, see add(Container&).
    *
-   * \see RefPopulation for more discussion. */
-  typedef Population<std::reference_wrapper<const _Candidate>> Ref;
+   * It is guaranteed that Population::Ref::Ref is identical to
+   * Population::Ref, which makes it convenient to chain selection function,
+   * e.g. \link randomSelect(size_t, Rng&) const `pop.randomSelect(5)`\endlink
+   * `.front().randomSelect()` for a simple tournament selection.
+   *
+   * It is the user's responsibility not to use the references beyond their
+   * scope. They are invalidated by operations which modify the original
+   * Population, namely all operations adding, removing, and reordering its
+   * elements.  This includes operations which need to sort the contents
+   * first, like rankSelect(). */
+  typedef Population<Candidate, Tag, true> Ref;
 
-  friend class Population<std::reference_wrapper<const _Candidate>>;
-  friend class Population<_Candidate>;
+  /* Befriend all compatible Populations */
+  template<class Tag_, bool ref_>
+  friend class Population<Candidate, Tag, ref>;
 
   /** \brief Creates an empty population. */
   Population() = default;
@@ -65,8 +76,7 @@ public:
 
   /** \brief Creates a population of size `count` whose candidates are results
    * of calls to the source function `src`.
-   *
-   * \see add(size_t, Source, bool, bool) for discussion about the parameters. */
+   * \copydetails add(size_t, Source, bool, bool) */
   template<class Source>
   explicit Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
     add(count, src, precompute, parallel);
@@ -81,26 +91,19 @@ public:
   /** \brief The move constructor. */
   Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
 
-  /** \brief Initializes a population as a copy of a gen::RefPopulation. */
-#ifdef DOXYGEN
-  explicit Population(const RefPopulation<Candidate>& _p) {
-#else
-  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  explicit Population(typename std::enable_if<!is_ref, const Ref&>::type _p) {
-#endif
-    Base::insert(end(), _p.begin(), _p.end());
+  /** \brief Initializes this population from a compatible Population.
+   * \copydetails add(Container&) */
+  template<class Tag_, bool ref_>
+  Population(const Population<Candidate, Tag_, ref_>& _p) {
+    add(_p);
     sorted = _p.sorted;
   }
 
-  /** \brief Initializes a reference Population from a whole Population.
-   * Exposed only for instances of gen::RefPopulation. */
-#ifdef DOXYGEN
-  explicit Population(const Population<Candidate>&) {
-#else
-  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  explicit Population(typename std::enable_if<is_ref, const Population<_Candidate>&>::type _p) {
-#endif
-    Base::insert(end(), _p.begin(), _p.end());
+  /** \brief Initializes this population from a compatible Population using
+   * move semantics. */
+  template<class Tag_, bool ref_>
+  Population(Population<Candidate, Tag_, ref_>&& _p) {
+    add(_p);
     sorted = _p.sorted;
   }
 
@@ -123,22 +126,32 @@ public:
     return *this;
   }
 
-  /** \brief Copy assignment from a gen::RefPopulation. */
-#ifdef DOXYGEN
-  Population& operator=(const RefPopulation<Candidate>& _p) {
-#else
-  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  typename std::enable_if<!is_ref, Population&>::type operator=(const Ref& _p) {
-#endif
+  /** \brief Copy assignment of a compatible Population.
+   * \copydetails add(Container&) */
+  template<class Tag_, bool ref_>
+  Population& operator=(const Population<Candidate, Tag_, ref_>& _p) {
     internal::write_lock lock(smp);
     Base::clear();
-    Base::insert(end(), _p.begin(), _p.end());
+    Base::insert(Base::end(), _p.begin(), _p.end());
     sorted = _p.sorted;
     return *this;
   }
 
+  /** \brief Move assignment of a compatible Population. */
+  template<class Tag_, bool ref_>
+  Population& operator=(Population<Candidate, Tag_, ref_>&& _p) {
+    internal::write_lock lock(smp);
+    Base::clear();
+    Base::insert(Base::end(),
+        internal::move_iterator<decltype(_p.begin())>(_p.begin()),
+        internal::move_iterator<decltype(_p.end())>(_p.end()));
+    sorted = _p.sorted;
+    _p.clear();
+    return *this;
+  }
+
   /** \brief Adds a new candidate. */
-  void add(const _Candidate& c) {
+  void add(const Candidate& c) {
     internal::write_lock lock(smp);
     Base::push_back(c);
     sorted = false;
@@ -179,62 +192,42 @@ public:
         tmp.push_back(c);
       }
       #pragma omp critical
-      Base::insert(end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
+      Base::insert(Base::end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
     }
     sorted = false;
-  }
-
-  /** \brief Copies all candidates from a vector of `Candidate`s. */
-  void NOINLINE add(const std::vector<Candidate>& vec) {
-    add(vec.begin(), vec.end());
   }
 
   /** \brief Copies an iterator range from a container of `Candidate`s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
     internal::write_lock lock(smp);
-    Base::insert(end(), first, last);
+    Base::insert(Base::end(), first, last);
     sorted = false;
   }
 
-  /** \brief Moves all candidates from a vector of `Candidate`s. */
-  void NOINLINE add(std::vector<Candidate>&& vec) {
-    internal::write_lock lock(smp);
-    Base::reserve(size() + vec.size());
-    Base::insert(end(), std::make_move_iterator(vec.begin()), std::make_move_iterator(vec.end()));
+  /** \brief Copies all candidates from a container of `Candidate`s.
+   *
+   * If this population is a reference population, references to all members
+   * of the argument are taken, copies are made otherwise. */
+  template<class Container>
+  void NOINLINE add(Container& vec) {
+    add(vec.begin(), vec.end());
+  }
+
+#ifndef DOXYGEN
+  /** \brief Copies all candidates from a container of `Candidate`s. */
+  template<class Container>
+  void NOINLINE add(const Container& vec) {
+    add(vec.begin(), vec.end());
+  }
+#endif
+
+  /** \brief Moves all candidates from a container of `Candidate`s. */
+  template<class Container>
+  void NOINLINE add(Container&& vec) {
+    add(internal::move_iterator<decltype(vec.begin())>(vec.begin()),
+        internal::move_iterator<decltype(vec.end())>(vec.end()));
     vec.clear();
-    sorted = false;
-  }
-
-  /** \brief Copies all candidates from another Population. */
-  void add(const Population<Candidate>& pop) {
-    add(static_cast<const Base&>(pop));
-  }
-
-  /** \brief Moves all candidates from another Population. */
-  void add(Population<Candidate>&& pop) {
-    add(static_cast<Base&&>(pop));
-  }
-
-  /** \brief Copies all candidates from a gen::RefPopulation. */
-#ifdef DOXYGEN
-  void add(const RefPopulation<Candidate>& pop) {
-#else
-  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  typename std::enable_if<!is_ref, void>::type add(const Ref& pop) {
-#endif
-    add(pop.begin(), pop.end());
-  }
-
-  /** \brief Takes reference to all candidates from another Population.
-   * Exposed only for instances of gen::RefPopulation. */
-#ifdef DOXYGEN
-  void add(const Population<Candidate>&) {
-#else
-  template<bool is_ref = !std::is_same<_Candidate, Candidate>::value>
-  typename std::enable_if<is_ref, void>::type add(const Population<_Candidate>& pop) {
-#endif
-    add(pop.begin(), pop.end());
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -290,7 +283,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Ignored
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const _Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::write_lock lock(smp);
     if(size() <= minSize)
       return;
@@ -299,7 +292,7 @@ public:
     size_t sz = size();
     for(size_t i = 0; i < sz - 1; i++)
       if(test((*this)[i])) {
-        Base::erase(begin() + i);
+        Base::erase(Base::begin() + i);
         if(--sz <= minSize)
           return;
       }
@@ -323,7 +316,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Ignored
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const _Candidate&, const _Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::write_lock lock(smp);
     if(size() <= minSize)
       return;
@@ -333,7 +326,7 @@ public:
     for(size_t i = 0; i < sz - 1; i++)
       for(size_t j = sz - 1; j > i; j--)
         if(test((*this)[i], (*this)[j])) {
-          Base::erase(begin() + j);
+          Base::erase(Base::begin() + j);
           if(--sz <= minSize)
             return;
         }
@@ -367,11 +360,11 @@ public:
    * 
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const _Candidate& rankSelect(double bias, Rng& rng = rng) {
+  const Candidate& rankSelect(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const _Candidate&>(bias, rng);
+      return rankSelect_exp<const Candidate&>(bias, rng);
     else
-      return rankSelect_two<const _Candidate&, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   /**
@@ -403,8 +396,8 @@ public:
    *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const _Candidate& rankSelect(double bias, Rng& rng = rng) {
-    return rankSelect_two<const _Candidate&, fun>(bias, rng);
+  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+    return rankSelect_two<const Candidate&, fun>(bias, rng);
   }
 
   /** \copybrief rankSelect(double, Rng&)
@@ -414,11 +407,11 @@ public:
    *
    * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  _Candidate rankSelect_v(double bias, Rng& rng = rng) {
+  Candidate rankSelect_v(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<_Candidate>(bias, rng);
+      return rankSelect_exp<Candidate>(bias, rng);
     else
-      return rankSelect_two<_Candidate, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<Candidate, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   /** \copybrief rankSelect(double, Rng&)
@@ -428,8 +421,8 @@ public:
    *
    * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  _Candidate rankSelect_v(double bias, Rng& rng = rng) {
-    return rankSelect_two<_Candidate, fun>(bias, rng);
+  Candidate rankSelect_v(double bias, Rng& rng = rng) {
+    return rankSelect_two<Candidate, fun>(bias, rng);
   }
 
 private:
@@ -478,9 +471,9 @@ public:
    * allows this, use randomSelect_v(Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  const _Candidate& NOINLINE randomSelect(Rng& rng = rng) const {
+  const Candidate& randomSelect(Rng& rng = rng) const {
 #else
-  template<class Rng = decltype(rng), class Ret = const _Candidate&>
+  template<class Rng = decltype(rng), class Ret = const Candidate&>
   Ret NOINLINE randomSelect(Rng& rng = rng) const {
 #endif
     internal::read_lock lock(smp);
@@ -494,21 +487,20 @@ public:
   /** \copybrief randomSelect(Rng&) const
    * \brief Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
-  _Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
-    return randomSelect<Rng, _Candidate>(rng);
+  Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
+    return randomSelect<Rng, Candidate>(rng);
   }
 
   /** \brief Randomly selects `k` different candidates. If `k < size()`, the
    * whole population is returned.
    *
-   * The returned \link RefPopulation \endlink remains valid until the
-   * original population is modified.  Therefore there is a risk of
-   * invalidating it in a multi-threaded program if another thread
-   * concurrently modifies the population. If your code allows this, use
-   * randomSelect_v(size_t, Rng&) const instead. */
+   * The returned Ref remains valid until the original population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use randomSelect_v(size_t, Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  RefPopulation<Candidate> NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+  Ref randomSelect(size_t k, Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
   Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
@@ -527,7 +519,7 @@ public:
     idx.resize(k);
     Ret ret(k);
     for(auto i : idx)
-      ret.add((*this)[i]);
+      ret.add((const Candidate&)(*this)[i]);
     return ret;
   }
 
@@ -535,8 +527,8 @@ public:
    * \brief Works like randomSelect(size_t, Rng&) const but returns an independent
    * Population. */
   template<class Rng = decltype(rng)>
-  Population<_Candidate> NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
-    return randomSelect<Rng, Population<_Candidate>>(k, rng);
+  Population NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
+    return randomSelect<Rng, Population>(k, rng);
   }
 
   /** \brief Returns the best candidate of population.
@@ -555,8 +547,8 @@ public:
 #ifdef DOXYGEN
   const Candidate& best() {
 #else
-  template<class Ret = const _Candidate&>
-  Ret best() {
+  template<class Ret = const Candidate&>
+  Ret NOINLINE best() {
 #endif
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
@@ -571,16 +563,16 @@ public:
 
   /** \copybrief best()
    * \brief Works like best() but returns by value. */
-  _Candidate best_v() {
-    return best<_Candidate>();
+  Candidate best_v() {
+    return best<Candidate>();
   }
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const _Candidate& c, const Population<Candidate>& pop) {
+  friend size_t operator<< (const Candidate& c, const Population& pop) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(const _Candidate& cmp : pop)
+    for(const Candidate& cmp : pop)
       if(c << cmp)
         cnt++;
     return cnt;
@@ -588,10 +580,10 @@ public:
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const Population<Candidate>& pop, const _Candidate& c) {
+  friend size_t operator<< (const Population& pop, const Candidate& c) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(const _Candidate& cmp : pop)
+    for(const Candidate& cmp : pop)
       if(cmp << c)
         cnt++;
     return cnt;
@@ -599,18 +591,17 @@ public:
 
   /** \brief Returns a nondominated subset of this population.
    *
-   * The returned \link RefPopulation \endlink remains valid until the
-   * original population is modified.  Therefore there is a risk of
-   * invalidating it in a multi-threaded program if another thread
-   * concurrently modifies the population. If your code allows this, use
-   * front_v() instead.
+   * The returned Ref remains valid until the original population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use front_v() instead.
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
 #ifdef DOXYGEN
-  RefPopulation<Candidate> NOINLINE front(bool parallel = true) const {
+  Ref front(bool parallel = true) const {
 #else
   template<class Ret = Ref>
-  Ret front(bool parallel = true) const {
+  Ret NOINLINE front(bool parallel = true) const {
 #endif
     Ret ret{};
     internal::read_lock lock(smp);
@@ -624,15 +615,15 @@ public:
           break;
         }
       if(!dom[i])
-        ret.add((*this)[i]);
+        ret.add((const Candidate&)(*this)[i]);
     }
     return ret;
   }
 
   /** \copybrief front()
    * \brief Works like front() but returns an independent Population. */
-  Population<_Candidate> NOINLINE front_v(bool parallel = true) const {
-    return front<Population<_Candidate>>(parallel);
+  Population NOINLINE front_v(bool parallel = true) const {
+    return front<Population>(parallel);
   }
 
 
@@ -659,7 +650,7 @@ public:
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock(smp);
-    for(const _Candidate &c : *this) {
+    for(const Candidate &c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;
@@ -675,42 +666,16 @@ public:
         "This method requires the fitness type to implement an operator<.");
     if(!sorted) {
       internal::upgrade_lock up(lock);
-      std::sort(begin(), end());
+      std::sort(Base::begin(), Base::end());
       sorted = true;
     }
   }
 
   template<class Rng = decltype(rng)>
   void shuffle(Rng& rng) {
-    std::shuffle(begin(), end(), rng);
+    std::shuffle(Base::begin(), Base::end(), rng);
     sorted = false;
   }
 }; // class Population
-
-
-/** \brief A "reference population", a helper type for functions returning a
- * selection from an existing Population.
- *
- * This effectively allows to make a Population of references to Candidate,
- * e.g., to store the return value of Population::randomSelect(size_t, Rng&) const.
- * `RefPopulation<Candidate>` retains the capabilities of `Population<Candidate>`
- * like functions dependent on the existence of Candidate::operator< or
- * Candidate::operator<<. Most functions can be called on a `RefPopulation` and
- * it can be converted from and to normal population (taking references and
- * creating copies of all elements, respectively).
- *
- * Note that the elements of a \link RefPopulation \endlink are in fact
- * [`std::reference_wrapper`](http://en.cppreference.com/w/cpp/utility/functional/
- * reference_wrapper)`<const Candidate>`. This can implicitly be converted
- * to `const Candidate&` but some other uses may need to be modified. Most
- * importantly, the dot operator can not be overloaded within C++11 so
- * `x.fitness()` won't work for `x` taken from a \link RefPopulation \endlink.
- * If this is needed, convert explicitly to `const Candidate&` or use
- * [`std::reference_wrapper::get()`](http://en.cppreference.com/w/cpp/utility/
- * functional/reference_wrapper/get).
- *
- * \see Population::Ref */
-template<class Candidate>
-using RefPopulation = typename Population<Candidate>::Ref;
 
 } // namespace gen
