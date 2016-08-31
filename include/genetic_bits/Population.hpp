@@ -2,6 +2,24 @@ namespace gen {
 
 /** \brief The Population template.
  *
+ * From the following arguments, only Candidate is mandatory. For most
+ * purposes only `Population<Candidate>` should be needed externally. The
+ * other parameters are used mainly for return types of temporary objects. For
+ * any values of `Tag` and `ref`, `Population<Candidate, Tag, ref>` can be
+ * implicitly converted to a `Population<Candidate>`.
+ *
+ * Population can be used as a container of `Candidate`s with read-only access.
+ * The functions `begin()` and `end()` are exposed, returning random access
+ * iterators dereferencable to `const Candidate&` and allowing the iteration
+ * patterns
+ * ```
+ * for(auto& c : pop) { ... }
+ * ```
+ * and
+ * ```
+ * for(auto c : pop) { ... }
+ * ```
+ *
  * \param Candidate the class describing individual members of this
  * population. Must be derived from gen::Candidate.
  * \param Tag an optional supplement class to accompany each candidate. Used
@@ -51,8 +69,11 @@ public:
    *
    * It is guaranteed that Population::Ref::Ref is identical to
    * Population::Ref, which makes it convenient to chain selection function,
-   * e.g. \link randomSelect(size_t, Rng&) const `pop.randomSelect(5)`\endlink
-   * `.front().randomSelect()` for a simple tournament selection.
+   * e.g.
+   * ```
+   * pop.randomSelect(5).front().randomSelect()
+   * ```
+   * for a simple tournament selection.
    *
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
