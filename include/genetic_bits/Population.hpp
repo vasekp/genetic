@@ -66,8 +66,8 @@ public:
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
    * Population, namely all operations adding, removing, and reordering its
-   * elements.  This includes operations which need to sort the contents
-   * first, like rankSelect(). */
+   * elements.  This includes rankSelect() which needs to sort the contents
+   * for its operation. */
   typedef Population<Candidate, Tag, true> Ref;
 
   /* Befriend all compatible Populations */
@@ -405,6 +405,9 @@ public:
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
    *
+   * This function may, as a side effect, reorder candidates within this
+   * population and thus invalidate references.
+   *
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
@@ -440,6 +443,9 @@ public:
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates an error at compile time in
    * specializations for which this condition is not satisfied.
+   *
+   * This function may, as a side effect, reorder candidates within this
+   * population and thus invalidate references.
    *
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
