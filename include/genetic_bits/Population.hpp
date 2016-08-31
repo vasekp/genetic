@@ -389,7 +389,7 @@ public:
    *
    * This method accepts as a template parameter a name of a function
    * `double(double)` that will receive arguments linearly spaced between
-   * `1/size * bias` and `bias` for candidates ranked `1` through `size` and
+   * `1/size * max` and `max` for candidates ranked `1` through `size` and
    * its return value will be interpreted as inverse probability, and as such,
    * is expected to be positive and strictly increasing in its argument. This
    * function will be built in at compile time, eliminating a function pointer
@@ -408,7 +408,7 @@ public:
    * This function may, as a side effect, reorder candidates within this
    * population and thus invalidate references.
    *
-   * \param bias > 0 determines how much low-fitness solutions are preferred.
+   * \param max > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
@@ -416,15 +416,14 @@ public:
    * 
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng) {
+  const Candidate& rankSelect(double max, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const Candidate&>(bias, rng);
+      return rankSelect_exp<const Candidate&>(max, rng);
     else
-      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(max, rng);
   }
 
-  /**
-   * \brief Retrieves a candidate randomly chosen by rank-based selection.
+  /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
    * This method accepts as a template parameter a name of a function
    * `double(double, double)` that will receive its first argument linearly
@@ -434,6 +433,8 @@ public:
    * and strictly increasing in its argument. This function will be built in
    * at compile time, eliminating a function pointer lookup. A usual choice
    * for `fun` is `std::pow`.
+   * <!-- NOTE: don't make this the default value, the two functions could not
+   * be distinguished then. -->
    *
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
@@ -486,7 +487,7 @@ public:
 
 private:
   template<class Ret, class Rng>
-  Ret NOINLINE rankSelect_exp(double bias, Rng& rng = rng) {
+  Ret NOINLINE rankSelect_exp(double bias, Rng& rng) {
     static thread_local std::uniform_real_distribution<double> rDist(0, 1);
     double x = rDist(rng);
     internal::read_lock lock(smp);
@@ -500,8 +501,8 @@ private:
       return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
-  template<class Ret, double (*fun)(double, double), class Rng = decltype(rng)>
-  Ret NOINLINE rankSelect_two(double bias, Rng& rng = rng) {
+  template<class Ret, double (*fun)(double, double), class Rng>
+  Ret NOINLINE rankSelect_two(double bias, Rng& rng) {
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
@@ -518,6 +519,115 @@ private:
       last_sz = sz;
     }
     ensureSorted(lock);
+    return operator[](iDist(rng));
+  }
+
+public:
+
+  /** \brief Retrieves a candidate randomly chosen by fitness-based selection.
+   *
+   * This method accepts as a template parameter a name of a function
+   * `double(double)` that will receive the fitness of each candidate
+   * multiplied by a given constant and its return value will be interpreted
+   * as inverse probability, and as such, is expected to be positive and
+   * strictly increasing in its argument. This function will be built in at
+   * compile time, eliminating a function pointer lookup.  The default value
+   * is `std::exp`.
+   *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use fitnessSelect_v(double, Rng&) instead.
+   *
+   * Applicable only if the fitness type of `Candidate` can be converted to
+   * `double`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied.
+   *
+   * \param mult > 0 determines how much low-fitness solutions are preferred.
+   * Zero would mean no account on fitness in the selection process
+   * whatsoever. The bigger the value the more candidates with low fitness are
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   * 
+   * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  const Candidate& fitnessSelect(double mult, Rng& rng = rng) {
+    return fitnessSelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
+  }
+
+  /** \brief Retrieves a candidate randomly chosen by fitness-based selection.
+   *
+   * This method accepts as a template parameter a name of a function
+   * `double(double, double)` that will receive the fitness of each candidate
+   * as its first argument and the constant `bias` as the second and its
+   * return value will be interpreted as inverse probability. As such, is
+   * expected to be positive and strictly increasing in its argument. This
+   * function will be built in at compile time, eliminating a function pointer
+   * lookup. A usual choice `fun` is `std::pow`.
+   * <!-- NOTE: don't make this the default value, the two functions could not
+   * be distinguished then. -->
+   *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use fitnessSelect_v(double, Rng&) instead.
+   *
+   * Applicable only if the fitness type of `Candidate` can be converted to
+   * `double`. This method generates an error at compile time in
+   * specializations for which this condition is not satisfied.
+   *
+   * \param bias > 0 determines how much low-fitness solutions are preferred.
+   * Zero would mean no account on fitness in the selection process
+   * whatsoever. The bigger the value the more candidates with low fitness are
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   *
+   * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  const Candidate& fitnessSelect(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<const Candidate&, fun>(bias, rng);
+  }
+
+  /** \copybrief fitnessSelect(double, Rng&)
+   *
+   * Works like fitnessSelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+  }
+
+  /** \copybrief fitnessSelect(double, Rng&)
+   *
+   * Works like fitnessSelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<Candidate, fun>(bias, rng);
+  }
+
+private:
+  template<class Ret, double (*fun)(double, double), class Rng>
+  Ret NOINLINE fitnessSelect_int(double bias, Rng& rng) {
+    static thread_local std::discrete_distribution<size_t> iDist{};
+    static thread_local std::vector<double> probs{};
+    static thread_local size_t last_mod{(size_t)-1};
+    internal::read_lock lock(smp);
+    size_t sz = size();
+    if(sz == 0)
+      throw std::out_of_range("fitnessSelect(): Population is empty.");
+    if(last_mod != smp.get_mod_cnt()) {
+      probs.clear();
+      probs.reserve(sz);
+      for(const Candidate& c : *this)
+        probs.push_back(1 / fun(c.fitness(), bias));
+      iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
+      last_mod = smp.get_mod_cnt();
+    }
     return operator[](iDist(rng));
   }
 

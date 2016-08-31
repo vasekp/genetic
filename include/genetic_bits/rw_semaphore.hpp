@@ -9,6 +9,7 @@ namespace internal {
     std::mutex m{};  // protects both the members of this and the resource
     unsigned r{0}, w{0};  // active readers, waiting writers
     std::condition_variable rq{}, wq{};  // read queue, write queue
+    size_t mod_cnt{0};  // modification counter
 
     friend class rw_lock;
 
@@ -19,6 +20,8 @@ namespace internal {
     rw_semaphore(rw_semaphore&&) = delete;
     rw_semaphore& operator= (const rw_semaphore&) = delete;
     rw_semaphore& operator= (rw_semaphore&&) = delete;
+
+    size_t get_mod_cnt() { return mod_cnt; }
   };
 
 
@@ -56,6 +59,7 @@ namespace internal {
     ~rw_lock() {
       if(write) {
         --s.w;
+        ++s.mod_cnt;
         pers_lock.unlock();
         s.rq.notify_all();
       } else {
@@ -96,6 +100,7 @@ namespace internal {
         return;
       // Atomically combined action of -write and +read.
       --s.w;
+      ++s.mod_cnt;
       ++s.r;
       write = false;
       pers_lock.unlock();
