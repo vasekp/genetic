@@ -9,7 +9,7 @@ namespace gen {
  * implicitly converted to a `Population<Candidate>`.
  *
  * Population can be used as a container of `Candidate`s with read-only access.
- * The functions `begin()` and `end()` are exposed, returning random access
+ * The functions begin() and end() are exposed, returning random access
  * iterators dereferencable to `const Candidate&` and allowing the iteration
  * patterns
  * ```
@@ -19,6 +19,8 @@ namespace gen {
  * ```
  * for(auto c : pop) { ... }
  * ```
+ * Also, read-only element accessors at() and operator[]() are available for
+ * direct access to candidates.
  *
  * \param Candidate the class describing individual members of this
  * population. Must be derived from gen::Candidate.
@@ -36,26 +38,12 @@ class Population : private std::vector<internal::Tagged<Candidate, Tag, ref>> {
 
   typedef std::vector<internal::Tagged<Candidate, Tag, ref>> Base;
 
-  typedef internal::cast_iterator<const Candidate, typename Base::const_iterator> CastIter;
+  typedef internal::cast_iterator<const Candidate, typename Base::const_iterator> InternalIterator;
 
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
 
 public:
-  using Base::size;
-  using Base::clear;
-  using Base::operator[];
-
-#ifndef DOXYGEN
-  CastIter begin() const {
-    return CastIter(Base::cbegin());
-  }
-
-  CastIter end() const {
-    return CastIter(Base::cend());
-  }
-#endif
-
   /** \brief A corresponding "reference population", a helper type for
    * functions returning a selection from an existing Population.
    *
@@ -187,6 +175,29 @@ public:
     return *this;
   }
 
+  using Base::size;
+  using Base::clear;
+
+  /** \brief Returns an iterator to the beginning. */
+  InternalIterator begin() const {
+    return InternalIterator(Base::cbegin());
+  }
+
+  /** \brief Returns an iterator to the end. */
+  InternalIterator end() const {
+    return InternalIterator(Base::cend());
+  }
+
+  /** \brief Read-only access to a specified element (no bounds checking). */
+  const Candidate& operator[](size_t pos) const {
+    return static_cast<const Candidate&>(Base::operator[](pos));
+  }
+
+  /** \brief Read-only access to a specified element (with bounds checking). */
+  const Candidate& at(size_t pos) const {
+    return static_cast<const Candidate&>(Base::at(pos));
+  }
+
   /** \brief Adds a new candidate. */
   void add(const Candidate& c) {
     internal::write_lock lock(smp);
@@ -286,8 +297,8 @@ public:
     if(size() <= newSize)
       return;
     ensureSorted(lock);
-    const Candidate& dummy = *begin();  // needed by resize() if size() < newSize which can't happen
-    Base::resize(newSize, dummy);       // (otherwise we would need a default constructor)
+    const Candidate& dummy = Base::front(); // needed by resize() if size() < newSize which can't happen
+    Base::resize(newSize, dummy);           // (otherwise we would need a default constructor)
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -302,7 +313,7 @@ public:
     if(size() <= newSize)
       return;
     shuffle(rng);
-    const Candidate& dummy = *begin();  // see rankTrim()
+    const Candidate& dummy = Base::front(); // see rankTrim()
     Base::resize(newSize, dummy);
   }
 
@@ -333,7 +344,7 @@ public:
       shuffle(rng);
     size_t sz = size();
     for(size_t i = 0; i < sz - 1; i++)
-      if(test((*this)[i])) {
+      if(test(operator[](i))) {
         Base::erase(Base::begin() + i);
         if(--sz <= minSize)
           return;
@@ -367,7 +378,7 @@ public:
     size_t sz = size();
     for(size_t i = 0; i < sz - 1; i++)
       for(size_t j = sz - 1; j > i; j--)
-        if(test((*this)[i], (*this)[j])) {
+        if(test(operator[](i), operator[](j))) {
           Base::erase(Base::begin() + j);
           if(--sz <= minSize)
             return;
@@ -480,7 +491,7 @@ private:
     if(x == 1)
       return Base::back();
     else
-      return (*this)[(int)(-log(1 - x + x*exp(-bias))/bias*sz)];
+      return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
   template<class Ret, double (*fun)(double, double), class Rng = decltype(rng)>
@@ -501,7 +512,7 @@ private:
       last_sz = sz;
     }
     ensureSorted(lock);
-    return (*this)[iDist(rng)];
+    return operator[](iDist(rng));
   }
 
 public:
@@ -523,7 +534,7 @@ public:
     if(sz == 0)
       throw std::out_of_range("randomSelect(): Population is empty.");
     std::uniform_int_distribution<size_t> dist{0, sz - 1};
-    return (*this)[dist(rng)];
+    return operator[](dist(rng));
   }
 
   /** \copybrief randomSelect(Rng&) const
@@ -561,7 +572,7 @@ public:
     idx.resize(k);
     Ret ret(k);
     for(auto i : idx)
-      ret.add((const Candidate&)(*this)[i]);
+      ret.add(operator[](i));
     return ret;
   }
 
@@ -652,12 +663,12 @@ public:
     #pragma omp parallel for if(parallel)
     for(size_t i = 0; i < sz; i++) {
       for(size_t j = 0; j < sz; j++)
-        if(!dom[j] && (*this)[j] << (*this)[i]) {
+        if(!dom[j] && operator[](j) << operator[](i)) {
           dom[i] = 1;
           break;
         }
       if(!dom[i])
-        ret.add((const Candidate&)(*this)[i]);
+        ret.add(operator[](i));
     }
     return ret;
   }
