@@ -68,7 +68,16 @@ public:
   /** \brief Creates an empty population. */
   Population() = default;
 
-  /** \brief Creates an empty population but preallocate space for count
+  /* The copy and move constructors: trivial but we need explicit definition
+   * because the semaphore can't be default copied or moved */
+
+  /** \brief The copy constructor. */
+  Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
+
+  /** \brief The move constructor. */
+  Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
+
+  /** \brief Creates an empty population but preallocate space for `count`
    * candidates. */
   explicit Population(size_t count) {
     Base::reserve(count);
@@ -82,33 +91,43 @@ public:
     add(count, src, precompute, parallel);
   }
 
-  /* The copy and move constructors: trivial but we need explicit definition
-   * because the semaphore can't be default copied or moved */
+  /** \brief Initializes this population from an iterator range from a
+   * container of `Candidate`s. */
+  template<class InputIt>
+  explicit Population(InputIt first, InputIt last) {
+    add(first, last);
+  }
 
-  /** \brief The copy constructor. */
-  Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
+  /** \brief Initializes this population from a container of `Candidate`s
+   * (e.g., a `std::vector` or another Population).
+   * \copydetails add(const Container&) */
+  template<class Container>
+  explicit Population(const Container& vec) {
+    add(std::forward<Container>(vec));
+  }
 
-  /** \brief The move constructor. */
-  Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
+  /** \brief Initializes this population from a container of `Candidate`s
+   * using move semantics, leaving the original container empty. */
+  template<class Container>
+  explicit Population(Container&& vec) {
+    add(std::forward<Container>(vec));
+  }
 
-  /** \brief Initializes this population from a compatible Population.
-   * \copydetails add(Container&) */
+#ifndef DOXYGEN
+  /* There's no added functionality w.r.t. the above as far as the user is
+   * concerned, no need to document */
   template<class Tag_, bool ref_>
   Population(const Population<Candidate, Tag_, ref_>& _p) {
     add(_p);
     sorted = _p.sorted;
   }
 
-  /** \brief Initializes this population from a compatible Population using
-   * move semantics. */
   template<class Tag_, bool ref_>
   Population(Population<Candidate, Tag_, ref_>&& _p) {
-    add(_p);
+    add(std::move(_p));
     sorted = _p.sorted;
   }
-
-  /* The copy and move assignments: trivial but we need explicit definition
-   * semaphore can't be default copied or moved */
+#endif
 
   /** \brief Copy assignment operator. */
   Population& operator=(const Population& _p) {
@@ -127,7 +146,7 @@ public:
   }
 
   /** \brief Copy assignment of a compatible Population.
-   * \copydetails add(Container&) */
+   * \copydetails add(const Container&) */
   template<class Tag_, bool ref_>
   Population& operator=(const Population<Candidate, Tag_, ref_>& _p) {
     internal::write_lock lock(smp);
@@ -142,11 +161,8 @@ public:
   Population& operator=(Population<Candidate, Tag_, ref_>&& _p) {
     internal::write_lock lock(smp);
     Base::clear();
-    Base::insert(Base::end(),
-        internal::move_iterator<decltype(_p.begin())>(_p.begin()),
-        internal::move_iterator<decltype(_p.end())>(_p.end()));
+    move_add_unguarded(_p);
     sorted = _p.sorted;
-    _p.clear();
     return *this;
   }
 
@@ -160,7 +176,7 @@ public:
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate&& c) {
     internal::write_lock lock(smp);
-    Base::push_back(c);
+    Base::push_back(std::move(c));
     sorted = false;
   }
 
@@ -172,7 +188,6 @@ public:
    * - `std::function<(const) Candidate&>`: returning by reference,
    * - a pointer to function returning `Candidate` or `Candidate&`,
    * - a lambda function returning either.
-   * The template allows for optimizations (inlining) in the latter case.
    * \param precompute set to `true` to enable precomputing the candidates'
    * fitness (the evaluation is lazy by default)
    * \param parallel controls parallelization using OpenMP (on by default) */
@@ -210,26 +225,32 @@ public:
    * If this population is a reference population, references to all members
    * of the argument are taken, copies are made otherwise. */
   template<class Container>
-  void NOINLINE add(Container& vec) {
-    add(vec.begin(), vec.end());
-  }
-
-#ifndef DOXYGEN
-  /** \brief Copies all candidates from a container of `Candidate`s. */
-  template<class Container>
   void NOINLINE add(const Container& vec) {
     add(vec.begin(), vec.end());
   }
-#endif
 
   /** \brief Moves all candidates from a container of `Candidate`s. */
+  /* FIXME: is there a way to force lvalue references to use the previous overload? */
   template<class Container>
   void NOINLINE add(Container&& vec) {
-    add(internal::move_iterator<decltype(vec.begin())>(vec.begin()),
+    if(std::is_rvalue_reference<decltype(vec)>::value) {
+      internal::write_lock lock(smp);
+      move_add_unguarded(std::forward<Container>(vec));
+      sorted = false;
+    } else
+      add(vec.begin(), vec.end());
+  }
+
+private:
+  template<class Container>
+  void NOINLINE move_add_unguarded(Container&& vec) {
+    Base::insert(Base::end(),
+        internal::move_iterator<decltype(vec.begin())>(vec.begin()),
         internal::move_iterator<decltype(vec.end())>(vec.end()));
     vec.clear();
   }
 
+public:
   /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample.
    *
@@ -660,7 +681,7 @@ public:
     return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
   }
 
-  private:
+private:
   void ensureSorted(internal::rw_lock& lock) {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
