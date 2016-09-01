@@ -66,8 +66,9 @@ public:
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
    * Population, namely all operations adding, removing, and reordering its
-   * elements.  This includes rankSelect() which needs to sort the contents
-   * for its operation. */
+   * elements.  This includes rankSelect(), which needs to sort the contents
+   * for its operation, and reserve(), which may move the contents to a new
+   * memory location. */
   typedef Population<Candidate, Tag, true> Ref;
 
   /* Befriend all compatible Populations */
@@ -175,8 +176,27 @@ public:
     return *this;
   }
 
+#ifdef DOXYGEN
+  /** \brief Returns the current count of candidates. */
+  size_t size();
+#else
   using Base::size;
-  using Base::clear;
+#endif
+
+  /** \brief Empties the population. */
+  void clear() {
+    internal::write_lock lock(smp);
+    Base::clear();
+  }
+
+  /** \brief Reserves space for `count` candidates.
+   *
+   * If `count` is larger than the actual size of the population, all
+   * references may be invalidated. */
+  void reserve(size_t count) {
+    internal::write_lock lock(smp);
+    Base::reserve(count);
+  }
 
   /** \brief Returns an iterator to the beginning. */
   InternalIterator begin() const {
