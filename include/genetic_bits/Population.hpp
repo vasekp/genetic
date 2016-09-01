@@ -315,9 +315,10 @@ public:
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
-    internal::write_lock lock(smp);
+    internal::read_lock lock(smp);
     if(size() <= newSize)
       return;
+    lock.upgrade();
     ensureSorted(lock);
     const Candidate& dummy = Base::front(); // needed by resize() if size() < newSize which can't happen
     Base::resize(newSize, dummy);           // (otherwise we would need a default constructor)
@@ -331,9 +332,10 @@ public:
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
-    internal::write_lock lock(smp);
+    internal::read_lock lock(smp);
     if(size() <= newSize)
       return;
+    lock.upgrade();
     shuffle(rng);
     const Candidate& dummy = Base::front(); // see rankTrim()
     Base::resize(newSize, dummy);
@@ -359,9 +361,10 @@ public:
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
-    internal::write_lock lock(smp);
+    internal::read_lock lock(smp);
     if(size() <= minSize)
       return;
+    lock.upgrade();
     if(randomize)
       shuffle(rng);
     size_t sz = size();
@@ -392,9 +395,10 @@ public:
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
-    internal::write_lock lock(smp);
+    internal::read_lock lock(smp);
     if(size() <= minSize)
       return;
+    lock.upgrade();
     if(randomize)
       shuffle(rng);
     size_t sz = size();
