@@ -267,6 +267,7 @@ public:
   /** \brief Copies an iterator range from a container of `Candidate`s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
+    assert_iterator<InputIt>();
     internal::write_lock lock(smp);
     Base::insert(Base::end(), first, last);
     sorted = false;
@@ -296,6 +297,7 @@ public:
 private:
   template<class Container>
   void NOINLINE move_add_unguarded(Container&& vec) {
+    assert_iterator<decltype(vec.begin())>();
     Base::insert(Base::end(),
         internal::move_iterator<decltype(vec.begin())>(vec.begin()),
         internal::move_iterator<decltype(vec.end())>(vec.end()));
@@ -881,6 +883,12 @@ private:
   static void assert_comparable() {
     static_assert(internal::comparable<_FitnessType>(0),
         "This method requires the fitness type to implement an operator<.");
+  }
+
+  template<class InputIt>
+  static void assert_iterator() {
+    static_assert(std::is_convertible<typename InputIt::reference, const Candidate&>::value,
+        "The provided iterator does not return Candidate.");
   }
 }; // class Population
 
