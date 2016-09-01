@@ -524,19 +524,21 @@ private:
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE rankSelect_two(double bias, Rng& rng) {
     static thread_local std::discrete_distribution<size_t> iDist{};
-    static thread_local size_t last_sz = 0;
     static thread_local std::vector<double> probs{};
+    static thread_local size_t last_sz = 0;
+    static thread_local double last_bias = 0;
     internal::read_lock lock(smp);
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("rankSelect(): Population is empty.");
-    if(sz != last_sz) {
+    if(sz != last_sz || bias != last_bias) {
       probs.clear();
       probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
         probs.push_back(1 / fun((double)(i+1) / sz, bias));
       iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
       last_sz = sz;
+      last_bias = bias;
     }
     ensureSorted(lock);
     return operator[](iDist(rng));
@@ -636,18 +638,20 @@ private:
     static thread_local std::discrete_distribution<size_t> iDist{};
     static thread_local std::vector<double> probs{};
     static thread_local size_t last_mod{(size_t)-1};
+    static thread_local double last_bias = 0;
     internal::read_lock lock(smp);
     size_t sz = size();
     assert_double();
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): Population is empty.");
-    if(last_mod != smp.get_mod_cnt()) {
+    if(last_mod != smp.get_mod_cnt() || bias != last_bias) {
       probs.clear();
       probs.reserve(sz);
       for(const Candidate& c : *this)
         probs.push_back(1 / fun(c.fitness(), bias));
       iDist = std::discrete_distribution<size_t>(probs.begin(), probs.end());
       last_mod = smp.get_mod_cnt();
+      last_bias = bias;
     }
     return operator[](iDist(rng));
   }
