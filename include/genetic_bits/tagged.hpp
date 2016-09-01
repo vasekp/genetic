@@ -12,17 +12,22 @@ struct empty { };
  * encounter this mechanism directly as it transparently casts to a const
  * Candidate&. */
 template<class Candidate, class Tag, bool ref>
-class Tagged {
-  typename std::conditional<ref,
-             std::reference_wrapper<const Candidate>,
-             Candidate
-           >::type c;
-  Tag t{};
+class Tagged :
+public std::conditional<ref,
+           std::reference_wrapper<const Candidate>,
+           Candidate
+         >::type,
+private Tag {
 
-  public:
-  Tagged(const Candidate& _c): c(_c) { }
-  operator const Candidate&() const { return c; }
-  Tag& tag() { return t; }
+  typedef typename std::conditional<ref,
+    std::reference_wrapper<const Candidate>,
+    Candidate
+  >::type Base;
+
+public:
+  Tagged(const Candidate& _c): Base(_c) { }
+  Tagged(Candidate&& _c): Base(std::move(_c)) { }
+  Tag& tag() { return static_cast<Tag&>(*this); }
 };
 
 } // namespace internal

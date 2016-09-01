@@ -9,7 +9,7 @@ template<class C, class It>
 class cast_iterator: public It {
   public:
   cast_iterator(It&& it): It(it) { };
-  const C& operator*() const { return static_cast<C&>(It::operator*()); }
+  const C& operator*() const { return static_cast<const C&>(It::operator*()); }
 };
 
 
