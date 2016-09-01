@@ -38,7 +38,8 @@ class Population : private std::vector<internal::Tagged<Candidate, Tag, ref>> {
 
   typedef std::vector<internal::Tagged<Candidate, Tag, ref>> Base;
 
-  typedef internal::cast_iterator<const Candidate, typename Base::const_iterator> InternalIterator;
+  typedef internal::cast_iterator<const Candidate&, typename Base::iterator> iterator;
+  typedef internal::cast_iterator<const Candidate&, typename Base::const_iterator> const_iterator;
 
   static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
       "The Candidate type needs to be derived from gen::Candidate.");
@@ -199,13 +200,23 @@ public:
   }
 
   /** \brief Returns an iterator to the beginning. */
-  InternalIterator begin() const {
-    return InternalIterator(Base::cbegin());
+  iterator begin() {
+    return iterator(Base::begin());
   }
 
   /** \brief Returns an iterator to the end. */
-  InternalIterator end() const {
-    return InternalIterator(Base::cend());
+  iterator end() {
+    return iterator(Base::end());
+  }
+
+  /** \brief Returns a constant iterator to the beginning. */
+  const_iterator begin() const {
+    return const_iterator(Base::begin());
+  }
+
+  /** \brief Returns a constant iterator to the end. */
+  const_iterator end() const {
+    return const_iterator(Base::end());
   }
 
   /** \brief Read-only access to a specified element (no bounds checking). */
@@ -282,16 +293,20 @@ public:
     add(vec.begin(), vec.end());
   }
 
-  /** \brief Moves all candidates from a container of `Candidate`s. */
-  /* FIXME: is there a way to force lvalue references to use the previous overload? */
+  /** \brief Moves all candidates from a container of `Candidate`s.
+   *
+   * Moves between `Population`s are only supported if source and destination
+   * are both non-reference or both reference and are of the same Candidate type. */
   template<class Container>
-  void NOINLINE add(Container&& vec) {
-    if(std::is_rvalue_reference<decltype(vec)>::value) {
-      internal::write_lock lock(smp);
-      move_add_unguarded(std::forward<Container>(vec));
-      sorted = false;
-    } else
-      add(vec.begin(), vec.end());
+#ifdef DOXYGEN
+  void
+#else
+  typename std::enable_if<std::is_rvalue_reference<Container&&>::value, void>::type
+#endif
+  NOINLINE add(Container&& vec) {
+    internal::write_lock lock(smp);
+    move_add_unguarded(std::forward<Container>(vec));
+    sorted = false;
   }
 
 private:

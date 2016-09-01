@@ -8,8 +8,8 @@ namespace internal {
 template<class C, class It>
 class cast_iterator: public It {
   public:
-  cast_iterator(It&& it): It(it) { };
-  const C& operator*() const { return static_cast<const C&>(It::operator*()); }
+  cast_iterator(It it): It(it) { };
+  C operator*() const { return static_cast<C>(It::operator*()); }
 };
 
 
@@ -22,10 +22,10 @@ class move_iterator: public std::move_iterator<It> {
 
 template<class C, class It>
 class move_iterator<cast_iterator<C, It>>:
-public cast_iterator<C&&, std::move_iterator<It>> {
+public cast_iterator<typename std::decay<C>::type&&, It> {
   public:
   explicit move_iterator(cast_iterator<C, It> it):
-    cast_iterator<C&&, std::move_iterator<It>>(std::move_iterator<It>(it)) { }
+    cast_iterator<typename std::decay<C>::type&&, It>(it) { }
 };
 
 } // namespace internal
