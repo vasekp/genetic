@@ -5,6 +5,17 @@ namespace internal {
 
   /* Writers preference */
   struct rw_semaphore {
+    /* Invariants:
+     *  mutex free ⇒ semaphore members and resource constant
+     *  pers_lock free ⇒ no active writes (resource constant)
+     *  w = 0 ⇔ no writers waiting
+     *  r = 0 ⇔ no readers active
+     *  w → 0 ⇒ rq notified
+     *  r → 0 ⇒ wq notified
+     *  cnt = cache_cnt ⇒ res = cache_res
+     *  write active ⇒ r = 0, w > 0, pers_lock, cnt > cache_cnt
+     * Corollary:
+     *  see rw_lock::upgrade()! */
     protected:
     std::mutex m{};  // protects both the members of this and the resource
     unsigned r{0}, w{0};  // active readers, waiting writers
@@ -26,12 +37,6 @@ namespace internal {
 
 
   class rw_lock {
-    /* Invariants:
-     *  mutex free ⇒ semaphore members and resource constant
-     *  pers_lock free ⇒ no active writes (resource constant)
-     *  w = 0 ⇒ rq notified
-     *  r = 0 ⇒ wq notified
-     *  write active ⇒ r = 0, w > 0, pers_lock */
     rw_semaphore& s;
     std::unique_lock<std::mutex> pers_lock{};
     bool write{false};
@@ -46,6 +51,7 @@ namespace internal {
         pers_lock = std::unique_lock<std::mutex>(s.m);
         ++s.w;
         s.wq.wait(pers_lock, [&] { return s.r == 0; });
+        ++s.mod_cnt;
       } else {
         // Logic: read creates a temporary lock for the purposes of rq.wait and
         // s.r access. Read can only start when no one is writing or waiting to
@@ -59,7 +65,6 @@ namespace internal {
     ~rw_lock() {
       if(write) {
         --s.w;
-        ++s.mod_cnt;
         pers_lock.unlock();
         s.rq.notify_all();
       } else {
@@ -77,6 +82,18 @@ namespace internal {
     rw_lock& operator= (rw_lock&&) = delete;
 
     public:
+    /* Important: don't rely on any information about the resource obtained
+     * prior to upgrade()! Other writers may have stepped in during the wait.
+     * This won't be any of the threads started with a writers' lock since
+     * they are waiting for *us* to finish but if more readers simultaneously
+     * want to upgrade then they will have to wait for each other.
+     *
+     * However, a thread can check if its upgrade request was uninterrupted
+     * by other threads by comparing if s.mod_cnt raised by 1 exactly.
+     *
+     * This admittedly makes a lock upgrade not much different from a read
+     * release followed by write acquire. The difference is that an upgraded
+     * lock always has priority over waiting writes. */
     bool upgrade() {
       if(write)
         return false;
@@ -86,6 +103,7 @@ namespace internal {
       --s.r;
       write = true;
       s.wq.wait(pers_lock, [&] { return s.r == 0; });
+      ++s.mod_cnt;
       // It makes no sense for another waiting write to wake up now, that
       // would defeat the purpose of the upgrade. But we need to notify the
       // other threads that r might be zero as no one else would do that.
@@ -95,12 +113,13 @@ namespace internal {
       return true;
     }
 
+    /* Downgrade a write lock to a read lock, allowing the read to finish
+     * before another writer obtains the lock. */
     void downgrade() {
       if(!write)
         return;
       // Atomically combined action of -write and +read.
       --s.w;
-      ++s.mod_cnt;
       ++s.r;
       write = false;
       pers_lock.unlock();
