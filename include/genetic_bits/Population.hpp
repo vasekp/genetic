@@ -24,9 +24,10 @@ namespace gen {
  *
  * \param Candidate the class describing individual members of this
  * population. Must be derived from gen::Candidate.
- * \param Tag an optional supplement class to accompany each candidate. Used
- * for internal purposes. This does not enter iterations over this population
- * and is not duplicated when copies or references are taken.
+ * \param Tag an optional supplement class or literal type to accompany each
+ * candidate. Used for internal purposes. This does not enter iterations over
+ * this population and is not duplicated when copies or references are taken.
+ * When supplied, must represent a default-constructible type.
  * \param is_ref if set to `true`, this is a reference population. See
  * Population::Ref for more details. */
 template<class Candidate, class Tag = internal::empty, bool is_ref = false>
