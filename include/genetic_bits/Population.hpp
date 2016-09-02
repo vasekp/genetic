@@ -2,10 +2,10 @@ namespace gen {
 
 /** \brief The Population template.
  *
- * From the following arguments, only Candidate is mandatory. For most
+ * From the following parameters, only Candidate is mandatory. For most
  * purposes only `Population<Candidate>` should be needed externally. The
  * other parameters are used mainly for return types of temporary objects. For
- * any values of `Tag` and `ref`, `Population<Candidate, Tag, ref>` can be
+ * any values of `Tag` and `is_ref`, `Population<Candidate, Tag, is_ref>` can be
  * implicitly converted to a `Population<Candidate>`.
  *
  * Population can be used as a container of `Candidate`s with read-only access.
@@ -27,16 +27,16 @@ namespace gen {
  * \param Tag an optional supplement class to accompany each candidate. Used
  * for internal purposes. This does not enter iterations over this population
  * and is not duplicated when copies or references are taken.
- * \param ref if set to `true`, this is a reference population. See
+ * \param is_ref if set to `true`, this is a reference population. See
  * Population::Ref for more details. */
-template<class Candidate, class Tag = internal::empty, bool ref = false>
-class Population : private std::vector<internal::Tagged<Candidate, Tag, ref>> {
+template<class Candidate, class Tag = internal::empty, bool is_ref = false>
+class Population : private std::vector<internal::Tagged<Candidate, Tag, is_ref>> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
   typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
 
-  typedef std::vector<internal::Tagged<Candidate, Tag, ref>> Base;
+  typedef std::vector<internal::Tagged<Candidate, Tag, is_ref>> Base;
 
   typedef internal::cast_iterator<const Candidate&, typename Base::iterator> iterator;
   typedef internal::cast_iterator<const Candidate&, typename Base::const_iterator> const_iterator;
@@ -72,9 +72,9 @@ public:
    * memory location. */
   typedef Population<Candidate, Tag, true> Ref;
 
-  /* Befriend all compatible Populations */
-  template<class Tag_, bool ref_>
-  friend class Population<Candidate, Tag, ref>;
+   /* Befriend all compatible Populations */
+   template<class, class, bool>
+   friend class Population;
 
   /** \brief Creates an empty population. */
   Population() = default;
