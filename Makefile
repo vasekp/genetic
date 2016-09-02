@@ -25,7 +25,7 @@ CXXFLAGS += -fno-diagnostics-show-caret -fopenmp
 # Flags specific for different targets
 FLAGS += -O3
 FLAGS.b += -DBENCH -DDEBUG -O3
-FLAGS.d += -DDEBUG -g
+FLAGS.d += -DBENCH -DDEBUG -g
 FLAGS.od += -O3 -DDEBUG -fno-inline-functions -g
 FLAGS.p += -O1 -DDEBUG -pg
 FLAGS.op += -O3 -DDEBUG -fno-inline-functions -pg

@@ -28,8 +28,9 @@ namespace Config {
   const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pDeleteUniform = 0.10;  // probability of single gate deletion 
+  const float selectBias = 0.5;
 
-  const float heurFactor = 0.15;      // how much prior success of genetic ops should influence future choices
+  const float heurFactor = 100;       // how much prior success of genetic ops should influence future choices
 
   const float pControl = 0.25;        // how much each bit is likely to be a control bit at gate creation
 
@@ -213,7 +214,7 @@ class Candidate: public gen::Candidate<Fitness> {
 };
 
 
-typedef gen::Population<Candidate> Population;
+typedef gen::Population<Candidate, size_t> Population;
 
 
 class CandidateFactory {
@@ -265,7 +266,7 @@ class CandidateFactory {
 
   static void normalizeWeights() {
     unsigned total = std::accumulate(weights.begin(), weights.end(), 0);
-    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize2 / total;
+    float factor = 1/Config::heurFactor * (float)func.size()*Config::popSize / total * weights.size() * Config::nGen;
     for(auto& w : weights)
       w *= factor;
   }
@@ -294,10 +295,7 @@ class CandidateFactory {
 
   private:
   const Candidate& get() {
-    /* Select k random candidates without replacement
-     * Remove dominated candidates from selection
-     * Select randomly from the rest */
-    return pop.randomSelect(5).front().randomSelect();
+    return pop.NSGASelect(Config::selectBias);
   }
 
   Candidate mAlterTarget() {
@@ -572,7 +570,7 @@ const std::vector<std::pair<CandidateFactory::GenOp, std::string>> CandidateFact
     { &CandidateFactory::mAddSlice,          "AddSlice" },
     { &CandidateFactory::mAddPairs,          "AddPairs" },
     { &CandidateFactory::mDeleteSlice,       "DelSlice" },
-    { &CandidateFactory::mDeleteSliceShort,  "DelShort" },
+    //{ &CandidateFactory::mDeleteSliceShort,  "DelShort" },
     //{ &CandidateFactory::mDeleteUniform,     "DelUnif" },
     //{ &CandidateFactory::mSplitSwap2,        "SpltSwp2"  },
     { &CandidateFactory::mSplitSwap4,        "SpltSwp4"  },
@@ -600,16 +598,8 @@ int main() {
 
     /* Find the nondominated subset and trim down do popSize */
     auto nondom = pop.front();
-    //std::cout << nondom.size();
-    nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
-        return a.fitness() == b.fitness();
-      }, Config::popSize);
-    nondom.randomTrim(Config::popSize);
-    //std::cout << " → " << nondom.size() << std::endl;
+    //nondom.randomTrim(Config::popSize); // not necessary: this is usually about 10
     size_t nd = nondom.size();
-
-    for(const Candidate& c : nondom)
-      CandidateFactory::hit(c.getOrigin());
 
     /* Top up to popSize2 candidates, precomputing fitnesses */
     Population pop2(Config::popSize2);
@@ -619,6 +609,12 @@ int main() {
     /* Merge the nondominated subset of the previous population */
     pop2.add(nondom);
     pop = std::move(pop2);
+
+    for(const Candidate& c : pop.front().randomSelect(Config::popSize))
+      CandidateFactory::hit(c.getOrigin());
+    pop.prune([](const Candidate& a, const Candidate& b) -> bool {
+      return a.fitness() == b.fitness();
+      });
 
     /* Summarize */
     nondom = pop.front();
