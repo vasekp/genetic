@@ -22,12 +22,13 @@ namespace Config {
 #ifdef DEBUG
   const int nGen = 100;
 #else
-  const int nGen = 2000;
+  const int nGen = 500;
 #endif
 
   const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
   const float pDeleteUniform = 0.10;  // probability of single gate deletion 
+  const float selectBias = 0.5;
 
   const float heurFactor = 100;       // how much prior success of genetic ops should influence future choices
 
@@ -213,7 +214,7 @@ class Candidate: public gen::Candidate<Fitness> {
 };
 
 
-typedef gen::Population<Candidate> Population;
+typedef gen::Population<Candidate, size_t> Population;
 
 
 class CandidateFactory {
@@ -294,10 +295,7 @@ class CandidateFactory {
 
   private:
   const Candidate& get() {
-    /* Select k random candidates without replacement
-     * Remove dominated candidates from selection
-     * Select randomly from the rest */
-    return pop.randomSelect(5).front().randomSelect();
+    return pop.NSGASelect(Config::selectBias);
   }
 
   Candidate mAlterTarget() {
