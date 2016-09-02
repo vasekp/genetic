@@ -846,7 +846,164 @@ public:
     return front<Population>(parallel);
   }
 
+  /** \brief Retrieves a candidate randomly chosen by the NSGA algorithm.
+   *
+   * This method accepts as a template parameter a name of a function
+   * `double(double)` that will receive the length of the longest chain of
+   * successively dominating candidates of each candidate, multiplied by a
+   * given constant, and its return value will be interpreted as inverse
+   * probability, and as such, is expected to be positive and strictly
+   * increasing in its argument. This function will be built in at compile
+   * time, eliminating a function pointer lookup.  The default value is
+   * `std::exp`.
+   *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use NSGASelect_v(double, Rng&) instead.
+   *
+   * Applicable only if the `Tag` parameter of this Population is `size_t`.
+   * This method generates an error at compile time in specializations for
+   * which this condition is not satisfied.
+   *
+   * \param mult > 0 determines how much nondominated solutions are preferred.
+   * Zero would mean no account on dominance rank in the selection process
+   * whatsoever. The bigger the value the more nondominated candidates are
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   *
+   * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  const Candidate& NSGASelect(double mult, Rng& rng = rng) {
+    return NSGASelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
+  }
 
+  /** \brief Retrieves a candidate randomly chosen by the NSGA algorithm.
+   *
+   * This method accepts as a template parameter a name of a function
+   * `double(double, double)` that will receive the length of the longest
+   * chain of successively dominating candidates of each candidate as its
+   * first argument and the constant `bias` as the second and its return value
+   * will be interpreted as inverse probability. As such, is expected to be
+   * positive and strictly increasing in its argument. This function will be
+   * built in at compile time, eliminating a function pointer lookup. A usual
+   * choice `fun` is `std::pow`.
+   * <!-- NOTE: don't make this the default value, the two functions could not
+   * be distinguished then. -->
+   *
+   * The returned reference remains valid until the population is modified.
+   * Therefore there is a risk of invalidating it in a multi-threaded program
+   * if another thread concurrently modifies the population. If your code
+   * allows this, use NSGASelect_v(double, Rng&) instead.
+   *
+   * Applicable only if the `Tag` parameter of this Population is `size_t`.
+   * This method generates an error at compile time in specializations for
+   * which this condition is not satisfied.
+   *
+   * \param bias > 0 determines how much nondominated solutions are preferred.
+   * Zero would mean no account on dominance rank in the selection process
+   * whatsoever. The bigger the value the more nondominated candidates are
+   * likely to be selected.
+   * \param rng the random number generator, or gen::rng by default.
+   *
+   * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  const Candidate& NSGASelect(double bias, Rng& rng = rng) {
+    return NSGASelect_int<const Candidate&, fun>(bias, rng);
+  }
+
+  /** \copybrief NSGASelect(double, Rng&)
+   *
+   * Works like NSGASelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  Candidate NSGASelect_v(double bias, Rng& rng = rng) {
+    return NSGASelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+  }
+
+  /** \copybrief NSGASelect(double, Rng&)
+   *
+   * Works like NSGASelect(double, Rng&) but returns by value.
+   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
+   *
+   * \returns a copy of a randomly chosen candidate. */
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  Candidate NSGASelect_v(double bias, Rng& rng = rng) {
+    return NSGASelect_int<Candidate, fun>(bias, rng);
+  }
+
+private:
+  struct _nsga_struct {
+    const Candidate& r;
+    size_t& rank;
+    size_t dom_cnt;
+    std::deque<_nsga_struct*> q;
+  };
+
+  void NOINLINE _nsga_rate(internal::rw_lock& lock) {
+    internal::upgrade_lock up(lock);
+    std::list<_nsga_struct> ref{};
+    for(auto& tg : static_cast<Base&>(*this))
+      ref.push_back(_nsga_struct{static_cast<const Candidate&>(tg), tg.tag(), 0, {}});
+    for(auto& r : ref)
+      for(auto& s : ref)
+        if(r.r << s.r) {
+          r.q.push_back(&s);
+          s.dom_cnt++;
+        }
+    size_t cur_rank = 0;
+    while(ref.size() > 0) {
+      std::vector<_nsga_struct> cur_front{};
+      {
+        auto it = ref.begin();
+        auto end = ref.end();
+        while(it != end) {
+          if(it->dom_cnt == 0) {
+            cur_front.push_back(std::move(*it));
+            ref.erase(it++);
+          } else
+            it++;
+        }
+      }
+      for(auto& r : cur_front) {
+        for(auto q : r.q)
+          q->dom_cnt--;
+        r.rank = cur_rank;
+      }
+      cur_rank++;
+    }
+  }
+
+  std::discrete_distribution<size_t> _nsgaSelect_dist{};
+  std::vector<double> _nsgaSelect_probs{};
+  size_t _nsgaSelect_last_mod{(size_t)-1};
+  double _nsgaSelect_last_bias{};
+
+  template<class Ret, double (*fun)(double, double), class Rng>
+  Ret NOINLINE NSGASelect_int(double bias, Rng& rng) {
+    internal::read_lock lock(smp);
+    assert_sztag();
+    size_t sz = size();
+    if(sz == 0)
+      throw std::out_of_range("NSGASelect(): Population is empty.");
+    if(_nsgaSelect_last_mod != smp.get_mod_cnt() || bias != _nsgaSelect_last_bias) {
+      lock.upgrade();
+      _nsgaSelect_probs.clear();
+      _nsgaSelect_probs.reserve(sz);
+      _nsga_rate(lock);
+      for(auto& tg : static_cast<Base&>(*this))
+        _nsgaSelect_probs.push_back(1 / fun(tg.tag(), bias));
+      _nsgaSelect_dist = std::discrete_distribution<size_t>(_nsgaSelect_probs.begin(), _nsgaSelect_probs.end());
+      _nsgaSelect_last_mod = smp.get_mod_cnt();
+      _nsgaSelect_last_bias = bias;
+    }
+    size_t ix = _nsgaSelect_dist(rng);
+    return operator[](ix);
+  }
+
+public:
   /** \brief The return type of stat(). */
   struct Stat {
     double mean;  ///< The mean fitness of the Population.
@@ -909,6 +1066,11 @@ private:
   static void assert_iterator() {
     static_assert(std::is_convertible<typename InputIt::reference, const Candidate&>::value,
         "The provided iterator does not return Candidate.");
+  }
+
+  static void assert_sztag() {
+    static_assert(std::is_same<Tag, size_t>::value,
+        "This method requires a NSGA rank tag (Tag = size_t).");
   }
 }; // class Population
 
