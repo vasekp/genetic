@@ -825,6 +825,9 @@ public:
 #endif
     Ret ret{};
     internal::read_lock lock(smp);
+    /* If we're a NSGA population, the front may have been precomputed */
+    if(front_nsga(ret))
+      return ret;
     size_t sz = size();
     std::vector<char> dom(sz, 0);
     #pragma omp parallel for if(parallel)
@@ -846,6 +849,27 @@ public:
     return front<Population>(parallel);
   }
 
+private:
+  template<class Ret, typename T = Tag>
+  typename std::enable_if<std::is_same<T, size_t>::value, bool>::type
+  front_nsga(Ret& ret) const {
+    if(smp.get_mod_cnt() == _nsgaSelect_last_mod) {
+      for(auto& tg : (Base&)(*this))
+        if(tg.tag() == 0)
+          ret.add(static_cast<Candidate&>(tg));
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  template<class Ret, typename T = Tag>
+  typename std::enable_if<!std::is_same<T, size_t>::value, bool>::type
+  front_nsga(Ret& ret) const {
+    return false;
+  }
+
+public:
   /** \brief Retrieves a candidate randomly chosen by the NSGA algorithm.
    *
    * This method accepts as a template parameter a name of a function
@@ -988,11 +1012,12 @@ private:
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("NSGASelect(): Population is empty.");
-    if(_nsgaSelect_last_mod != smp.get_mod_cnt() || bias != _nsgaSelect_last_bias) {
+    if(smp.get_mod_cnt() != _nsgaSelect_last_mod || bias != _nsgaSelect_last_bias) {
       lock.upgrade();
+      if(smp.get_mod_cnt() != _nsgaSelect_last_mod + 1)
+        _nsga_rate(lock);
       _nsgaSelect_probs.clear();
       _nsgaSelect_probs.reserve(sz);
-      _nsga_rate(lock);
       for(auto& tg : static_cast<Base&>(*this))
         _nsgaSelect_probs.push_back(1 / fun(tg.tag(), bias));
       _nsgaSelect_dist = std::discrete_distribution<size_t>(_nsgaSelect_probs.begin(), _nsgaSelect_probs.end());
