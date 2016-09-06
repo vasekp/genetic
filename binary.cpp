@@ -29,7 +29,7 @@ namespace Config {
 
   const float expLengthIni = 30;      // expected length of circuits in 0th generation
   const float expLengthAdd = 1.5;     // expected length of gates inserted in mutation
-  const float pDeleteUniform = 0.10;  // probability of single gate deletion 
+  const float pDeleteUniform = 0.10;  // probability of single gate deletion
 
   const float pnIn = 10;              // penalty for leaving input register modified (= error)
   const float pnLength = 1/10000.0;   // penalty for number of gates

@@ -248,8 +248,8 @@ public:
    *
    * \param count the number of candidates to generate
    * \param src source function; one of:
-   * - `std::function<(const) Candidate>`: returning by copy,
-   * - `std::function<(const) Candidate&>`: returning by reference,
+   * - `std::function<(const) Candidate ()>`: returning by copy,
+   * - `std::function<(const) Candidate& ()>`: returning by reference,
    * - a pointer to function returning `Candidate` or `Candidate&`,
    * - a lambda function returning either.
    * \param precompute set to `true` to enable precomputing the candidates'
@@ -393,7 +393,7 @@ public:
   }
 
   /** \brief Reduces the population by selective removal of candidates.
-   * 
+   *
    * Candidates are tested for similarity according to a provided crierion
    * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
    * is kept. A minimum number of candidates can be set; if so, the procedure
@@ -427,36 +427,57 @@ public:
         }
   }
 
+#ifdef DOXYGEN
+
   /** \brief Retrieves a candidate randomly chosen by rank-based selection.
    *
-   * This method accepts as a template parameter a name of a function
-   * `double(double)` that will receive arguments linearly spaced between
-   * `1/size * max` and `max` for candidates ranked `1` through `size` and
-   * its return value will be interpreted as inverse probability, and as such,
-   * is expected to be positive and strictly increasing in its argument. This
-   * function will be built in at compile time, eliminating a function pointer
-   * lookup.  The default value is `std::exp`, for which an equivalent fast
-   * replacement algorithm is provided.
+   * In determining the probability of each candidate, its rank, rescaled to
+   * the range (0, 1], is processed by a given function as described below,
+   * and the returned value is interpreted as an inverse probability.
+   *
+   * The population is sorted from the lowest to the highest fitness value and
+   * each candidate is assigned a rank between 1 and `max`. If two or more
+   * candidates have an equal fitness, they will be assigned different ranks
+   * in an undefined order. This rank is then divided by `max` before passing
+   * it to the processing function.
    *
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use rankSelect_v(double, Rng&) instead.
+   * allows this, use rankSelect_v() instead.
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
    * using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
-   * This function may, as a side effect, reorder candidates within this
-   * population and thus invalidate references.
-   *
-   * \param max > 0 determines how much low-fitness solutions are preferred.
+   * \tparam fun A `constexpr` pointer to a function of signature
+   * either `double(*)(double)` or `double(*)(double, double)`. In the former
+   * case, the argument is `x * bias`, in the latter case the arguments
+   * are `x` and `bias`, where `x` denotes the rescaled rank of each candidate.
+   * It must be positive and strictly increasing in `x` for `bias > 0`.
+   * This function will be built in at compile time, eliminating a function
+   * pointer lookup. The default is `std::exp`, for which an fast specialized
+   * algorithm is provided, another usual choice is `std::pow`.
+   * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
-   * 
+   *
    * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  const Candidate& rankSelect(double bias, Rng& rng = rng);
+
+  /** \copybrief rankSelect()
+   *
+   * Works like rankSelect() but returns by value.
+   *
+   * \returns a copy of the randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  Candidate rankSelect_v(double bias, Rng& rng = rng);
+
+#else
+
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& rankSelect(double max, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
@@ -465,49 +486,11 @@ public:
       return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(max, rng);
   }
 
-  /** \brief Retrieves a candidate randomly chosen by rank-based selection.
-   *
-   * This method accepts as a template parameter a name of a function
-   * `double(double, double)` that will receive its first argument linearly
-   * spaced between `1/size` and `1` for candidates ranked `1` through `size`
-   * and second argument equal to `bias` and its return value will be
-   * interpreted as inverse probability. As such, is expected to be positive
-   * and strictly increasing in its argument. This function will be built in
-   * at compile time, eliminating a function pointer lookup. A usual choice
-   * for `fun` is `std::pow`.
-   * <!-- NOTE: don't make this the default value, the two functions could not
-   * be distinguished then. -->
-   *
-   * The returned reference remains valid until the population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use rankSelect_v(double, Rng&) instead.
-   *
-   * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates a compile-time error in
-   * specializations for which this condition is not satisfied.
-   *
-   * This function may, as a side effect, reorder candidates within this
-   * population and thus invalidate references.
-   *
-   * \param bias > 0 determines how much low-fitness solutions are preferred.
-   * Zero would mean no account on fitness in the selection process
-   * whatsoever. The bigger the value the more candidates with low fitness are
-   * likely to be selected.
-   * \param rng the random number generator, or gen::rng by default.
-   *
-   * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate& rankSelect(double bias, Rng& rng = rng) {
     return rankSelect_two<const Candidate&, fun>(bias, rng);
   }
 
-  /** \copybrief rankSelect(double, Rng&)
-   *
-   * Works like rankSelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate rankSelect_v(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
@@ -516,16 +499,12 @@ public:
       return rankSelect_two<Candidate, &internal::eval_in_product<fun>>(bias, rng);
   }
 
-  /** \copybrief rankSelect(double, Rng&)
-   *
-   * Works like rankSelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate rankSelect_v(double bias, Rng& rng = rng) {
     return rankSelect_two<Candidate, fun>(bias, rng);
   }
+
+#endif
 
 private:
   std::uniform_real_distribution<double> _uniform{0, 1};
@@ -571,58 +550,31 @@ private:
 
 public:
 
-  /** \brief Retrieves a candidate randomly chosen by fitness-based selection.
-   *
-   * This method accepts as a template parameter a name of a function
-   * `double(double)` that will receive the fitness of each candidate
-   * multiplied by a given constant and its return value will be interpreted
-   * as inverse probability, and as such, is expected to be positive and
-   * strictly increasing in its argument. This function will be built in at
-   * compile time, eliminating a function pointer lookup.  The default value
-   * is `std::exp`.
-   *
-   * The returned reference remains valid until the population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use fitnessSelect_v(double, Rng&) instead.
-   *
-   * Applicable only if the fitness type of `Candidate` can be converted to
-   * `double`. This method generates a compile-time error in
-   * specializations for which this condition is not satisfied.
-   *
-   * \param mult > 0 determines how much low-fitness solutions are preferred.
-   * Zero would mean no account on fitness in the selection process
-   * whatsoever. The bigger the value the more candidates with low fitness are
-   * likely to be selected.
-   * \param rng the random number generator, or gen::rng by default.
-   * 
-   * \returns a constant reference to a randomly chosen candidate. */
-  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& fitnessSelect(double mult, Rng& rng = rng) {
-    return fitnessSelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
-  }
+#ifdef DOXYGEN
 
   /** \brief Retrieves a candidate randomly chosen by fitness-based selection.
    *
-   * This method accepts as a template parameter a name of a function
-   * `double(double, double)` that will receive the fitness of each candidate
-   * as its first argument and the constant `bias` as the second and its
-   * return value will be interpreted as inverse probability. As such, is
-   * expected to be positive and strictly increasing in its argument. This
-   * function will be built in at compile time, eliminating a function pointer
-   * lookup. A usual choice `fun` is `std::pow`.
-   * <!-- NOTE: don't make this the default value, the two functions could not
-   * be distinguished then. -->
+   * In determining the probability of each candidate, its fitness is
+   * processed by a given function as described below, and the returned value
+   * is interpreted as an inverse probability.
    *
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use fitnessSelect_v(double, Rng&) instead.
+   * allows this, use fitnessSelect_v() instead.
    *
    * Applicable only if the fitness type of `Candidate` can be converted to
    * `double`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
+   * \tparam fun A `constexpr` pointer to a function of signature
+   * either `double(*)(double)` or `double(*)(double, double)`. In the former
+   * case, the argument is `x * bias`, in the latter case the arguments
+   * are `x` and `bias`, where `x` denotes the fitness of each candidate.
+   * It must be positive and strictly increasing in `x` for `bias > 0`.
+   * This function will be built in at compile time, eliminating a function
+   * pointer lookup. The default is `std::exp`, another usual choice is
+   * `std::pow`.
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
@@ -630,32 +582,40 @@ public:
    * \param rng the random number generator, or gen::rng by default.
    *
    * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  const Candidate& fitnessSelect(double bias, Rng& rng = rng);
+
+  /** \copybrief fitnessSelect()
+   *
+   * Works like fitnessSelect() but returns by value.
+   *
+   * \returns a copy of the randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  Candidate fitnessSelect_v(double bias, Rng& rng = rng);
+
+#else
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  const Candidate& fitnessSelect(double mult, Rng& rng = rng) {
+    return fitnessSelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
+  }
+
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate& fitnessSelect(double bias, Rng& rng = rng) {
     return fitnessSelect_int<const Candidate&, fun>(bias, rng);
   }
 
-  /** \copybrief fitnessSelect(double, Rng&)
-   *
-   * Works like fitnessSelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
     return fitnessSelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
   }
 
-  /** \copybrief fitnessSelect(double, Rng&)
-   *
-   * Works like fitnessSelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
     return fitnessSelect_int<Candidate, fun>(bias, rng);
   }
+
+#endif
 
 private:
   std::discrete_distribution<size_t> _fitnessSelect_dist{};
@@ -706,14 +666,15 @@ public:
   }
 
   /** \copybrief randomSelect(Rng&) const
-   * \brief Works like randomSelect(Rng&) const but returns by value. */
+   *
+   * Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
   Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
     return randomSelect<Rng, Candidate>(rng);
   }
 
-  /** \brief Randomly selects `k` different candidates. If `k < size()`, the
-   * whole population is returned.
+  /** \brief Randomly selects `k` different candidates. If `k ≥ size()`, the
+   * entire population is returned.
    *
    * The returned Ref remains valid until the original population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
@@ -745,7 +706,8 @@ public:
   }
 
   /** \copybrief randomSelect(size_t, Rng&) const
-   * \brief Works like randomSelect(size_t, Rng&) const but returns an independent
+   *
+   * Works like randomSelect(size_t, Rng&) const but returns an independent
    * Population. */
   template<class Rng = decltype(rng)>
   Population NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
@@ -782,7 +744,8 @@ public:
   }
 
   /** \copybrief best()
-   * \brief Works like best() but returns by value. */
+   *
+   * Works like best() but returns by value. */
   Candidate best_v() {
     return best<Candidate>();
   }
@@ -844,7 +807,8 @@ public:
   }
 
   /** \copybrief front()
-   * \brief Works like front() but returns an independent Population. */
+   *
+   * Works like front() but returns an independent Population. */
   Population NOINLINE front_v(bool parallel = true) const {
     return front<Population>(parallel);
   }
@@ -870,93 +834,74 @@ private:
   }
 
 public:
+
+#ifdef DOXYGEN
+
   /** \brief Retrieves a candidate randomly chosen by the NSGA algorithm.
    *
-   * This method accepts as a template parameter a name of a function
-   * `double(double)` that will receive the length of the longest chain of
-   * successively dominating candidates of each candidate, multiplied by a
-   * given constant, and its return value will be interpreted as inverse
-   * probability, and as such, is expected to be positive and strictly
-   * increasing in its argument. This function will be built in at compile
-   * time, eliminating a function pointer lookup.  The default value is
-   * `std::exp`.
+   * In determining the probability of each candidate, the length of the
+   * longest chain of candidates successively dominating it is identified and
+   * processed by a given function as described below, whose returned value
+   * is interpreted as an inverse probability.
    *
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use NSGASelect_v(double, Rng&) instead.
+   * allows this, use NSGASelect_v() instead.
    *
    * Applicable only if the `Tag` parameter of this Population is `size_t`.
    * This method generates a compile-time error in specializations for
    * which this condition is not satisfied.
    *
-   * \param mult > 0 determines how much nondominated solutions are preferred.
+   * \tparam fun A `constexpr` pointer to a function of signature
+   * either `double(*)(double)` or `double(*)(double, double)`. In the former
+   * case, the argument is `x * bias`, in the latter case the arguments
+   * are `x` and `bias`, where `x` denotes the dominance rank of the candidate.
+   * It must be positive and strictly increasing in `x` for `bias > 0`.
+   * This function will be built in at compile time, eliminating a function
+   * pointer lookup. The default is `std::exp`, another usual choice is
+   * `std::pow`.
+   * \param bias > 0 determines how much low-dominated solutions are preferred.
    * Zero would mean no account on dominance rank in the selection process
-   * whatsoever. The bigger the value the more nondominated candidates are
+   * whatsoever. The bigger the value the more low-dominated candidates are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    *
    * \returns a constant reference to a randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  const Candidate& NSGASelect(double bias, Rng& rng = rng);
+
+  /** \copybrief NSGASelect()
+   *
+   * Works like NSGASelect() but returns by value.
+   *
+   * \returns a copy of the randomly chosen candidate. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  Candidate NSGASelect_v(double bias, Rng& rng = rng);
+
+#else
+
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& NSGASelect(double mult, Rng& rng = rng) {
     return NSGASelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
   }
 
-  /** \brief Retrieves a candidate randomly chosen by the NSGA algorithm.
-   *
-   * This method accepts as a template parameter a name of a function
-   * `double(double, double)` that will receive the length of the longest
-   * chain of successively dominating candidates of each candidate as its
-   * first argument and the constant `bias` as the second and its return value
-   * will be interpreted as inverse probability. As such, is expected to be
-   * positive and strictly increasing in its argument. This function will be
-   * built in at compile time, eliminating a function pointer lookup. A usual
-   * choice `fun` is `std::pow`.
-   * <!-- NOTE: don't make this the default value, the two functions could not
-   * be distinguished then. -->
-   *
-   * The returned reference remains valid until the population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use NSGASelect_v(double, Rng&) instead.
-   *
-   * Applicable only if the `Tag` parameter of this Population is `size_t`.
-   * This method generates a compile-time error in specializations for
-   * which this condition is not satisfied.
-   *
-   * \param bias > 0 determines how much nondominated solutions are preferred.
-   * Zero would mean no account on dominance rank in the selection process
-   * whatsoever. The bigger the value the more nondominated candidates are
-   * likely to be selected.
-   * \param rng the random number generator, or gen::rng by default.
-   *
-   * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate& NSGASelect(double bias, Rng& rng = rng) {
     return NSGASelect_int<const Candidate&, fun>(bias, rng);
   }
 
-  /** \copybrief NSGASelect(double, Rng&)
-   *
-   * Works like NSGASelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate NSGASelect_v(double bias, Rng& rng = rng) {
     return NSGASelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
   }
 
-  /** \copybrief NSGASelect(double, Rng&)
-   *
-   * Works like NSGASelect(double, Rng&) but returns by value.
-   * <!-- FIXME: no way of distinguishing between the two functions in Doxygen ->
-   *
-   * \returns a copy of a randomly chosen candidate. */
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate NSGASelect_v(double bias, Rng& rng = rng) {
     return NSGASelect_int<Candidate, fun>(bias, rng);
   }
+
+#endif
 
 private:
   struct _nsga_struct {
@@ -966,6 +911,10 @@ private:
     std::deque<_nsga_struct*> q;  // candidates dominated by this
   };
 
+  /* The rating needs to be done with the particular Population's lock,
+   * otherwise NSGASelect would think it's newer than the last record and
+   * would recalculate it. This function helps in NSGAref() where only the
+   * source Population's lock is used. */
   void _nsga_rate(bool parallel = false) {
     internal::write_lock lock(smp);
     _nsga_rate(lock, parallel);
