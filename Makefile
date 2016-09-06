@@ -1,5 +1,5 @@
 PROGS = regex binary binary-mo
-HEADERS = include/genetic include/genetic_bits/*.hpp
+HEADERS = include/genetic.hpp include/genetic_bits/*.hpp
 
 # This allows to distinguish between binaries made for debug, profiling, etc.
 # The main purpose is that "make debug" doesn't think there's nothing to make 
@@ -27,7 +27,7 @@ FLAGS += -O3
 FLAGS.b += -DBENCH -DDEBUG -O3
 FLAGS.d += -DBENCH -DDEBUG -g
 FLAGS.od += -O3 -DDEBUG -fno-inline-functions -g
-FLAGS.p += -O1 -DDEBUG -pg
+FLAGS.p += -O1 -DBENCH -DDEBUG -pg
 FLAGS.op += -O3 -DDEBUG -fno-inline-functions -pg
 
 

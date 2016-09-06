@@ -13,7 +13,7 @@
 #define NOINLINE
 #endif
 
-#include "genetic"
+#include "genetic.hpp"
 
 
 namespace Config {

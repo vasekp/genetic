@@ -2,17 +2,29 @@ namespace gen {
 
 /** \brief The Candidate template.
  *
- * Takes a typename `Fitness` which can be a simple type or a class with a
- * a default constructor and, optionally, `operator<`. If the latter is
- * provided it is assumed that it defines a total ordering on the `Fitness`
- * type.
+ * Takes a typename `Fitness` which can be a simple type or a class,
+ * optionally supporting `bool operator<`, representing a total ordering, or
+ * `bool operator<<`, representing a partial ordering. If either of the
+ * operators exist, they are extended to the Candidate type, comparing the
+ * fitness of two candidates. This is used to switch accessibility of various
+ * Population methods.
  *
  * The virtual implementation only keeps track of whether fitness has
  * been computed, and provides the precomputed value when available. The inner
  * function to compute fitness when required, computeFitness(), needs to be
- * provided in every derived class. Also, derived classes need to implement a
- * default constructor (or provide default values for all arguments in some
- * constructor) for the purposes of Population. */
+ * provided in every derived class.
+ *
+ * The intended use of Candidate is illustrated by the following example:
+ * ```
+ * struct Fitness { ... };
+ *
+ * class Candidate: public gen::Candidate<Fitness> {
+ *   public:
+ *     ...
+ *   private:
+ *     Fitness computeFitness() const { ... }
+ * };
+ * ``` */
 template<typename Fitness>
 class Candidate {
   mutable Fitness _fitness{};
