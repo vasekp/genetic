@@ -587,7 +587,7 @@ int main() {
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.add(std::move(pop));
-    
+
     /* Trim down to popSize using rankSelect */
     pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
       const Candidate &c = pop2.rankSelect(Config::trimBias);

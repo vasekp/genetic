@@ -22,13 +22,13 @@ namespace gen {
  * Also, read-only element accessors at() and operator[]() are available for
  * direct access to candidates.
  *
- * \param Candidate the class describing individual members of this
+ * \tparam Candidate the class describing individual members of this
  * population. Must be derived from gen::Candidate.
- * \param Tag an optional supplement class or literal type to accompany each
+ * \tparam Tag an optional supplement class or literal type to accompany each
  * candidate. Used for internal purposes. This does not enter iterations over
  * this population and is not duplicated when copies or references are taken.
  * When supplied, must represent a default-constructible type.
- * \param is_ref if set to `true`, this is a reference population. See
+ * \tparam is_ref if set to `true`, this is a reference population. See
  * Population::Ref for more details. */
 template<class Candidate, class Tag = internal::empty, bool is_ref = false>
 class Population : private std::vector<internal::Tagged<Candidate, Tag, is_ref>> {
@@ -325,7 +325,7 @@ public:
    * dropping the worst part of the sample.
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates an error at compile time in
+   * using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \param newSize the maximum desired size of the population. If this bound
@@ -444,7 +444,7 @@ public:
    * allows this, use rankSelect_v(double, Rng&) instead.
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates an error at compile time in
+   * using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * This function may, as a side effect, reorder candidates within this
@@ -484,7 +484,7 @@ public:
    * allows this, use rankSelect_v(double, Rng&) instead.
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates an error at compile time in
+   * using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * This function may, as a side effect, reorder candidates within this
@@ -587,7 +587,7 @@ public:
    * allows this, use fitnessSelect_v(double, Rng&) instead.
    *
    * Applicable only if the fitness type of `Candidate` can be converted to
-   * `double`. This method generates an error at compile time in
+   * `double`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \param mult > 0 determines how much low-fitness solutions are preferred.
@@ -620,7 +620,7 @@ public:
    * allows this, use fitnessSelect_v(double, Rng&) instead.
    *
    * Applicable only if the fitness type of `Candidate` can be converted to
-   * `double`. This method generates an error at compile time in
+   * `double`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \param bias > 0 determines how much low-fitness solutions are preferred.
@@ -763,7 +763,7 @@ public:
    * allows this, use best_v() instead.
    *
    * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates an error at compile time in
+   * using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied. */
 #ifdef DOXYGEN
   const Candidate& best() {
@@ -838,7 +838,7 @@ public:
           break;
         }
       if(!dom[i])
-        ret.add(operator[](i));
+        ret.add(operator[](i)); // thread-safe
     }
     return ret;
   }
@@ -887,7 +887,7 @@ public:
    * allows this, use NSGASelect_v(double, Rng&) instead.
    *
    * Applicable only if the `Tag` parameter of this Population is `size_t`.
-   * This method generates an error at compile time in specializations for
+   * This method generates a compile-time error in specializations for
    * which this condition is not satisfied.
    *
    * \param mult > 0 determines how much nondominated solutions are preferred.
@@ -921,7 +921,7 @@ public:
    * allows this, use NSGASelect_v(double, Rng&) instead.
    *
    * Applicable only if the `Tag` parameter of this Population is `size_t`.
-   * This method generates an error at compile time in specializations for
+   * This method generates a compile-time error in specializations for
    * which this condition is not satisfied.
    *
    * \param bias > 0 determines how much nondominated solutions are preferred.
@@ -1102,7 +1102,7 @@ public:
    *
    * Applicable only to candidate classes whose fitness is a simple floating
    * point type or allows an implicit convertion to one. This method
-   * generates an error at compile time in specializations for which this
+   * generates a compile-time error in specializations for which this
    * condition is not satisfied.
    *
    * \see Stat
