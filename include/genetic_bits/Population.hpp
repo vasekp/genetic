@@ -960,10 +960,10 @@ public:
 
 private:
   struct _nsga_struct {
-    const Candidate& r;
-    size_t& rank;
-    size_t dom_cnt;
-    std::deque<_nsga_struct*> q;
+    const Candidate& r; // reference to a candidate
+    size_t& rank;       // reference to its Tag in the original population
+    size_t dom_cnt;     // number of candidates dominating this
+    std::deque<_nsga_struct*> q;  // candidates dominated by this
   };
 
   void _nsga_rate(bool parallel = false) {
@@ -979,8 +979,8 @@ private:
       ref.push_back(_nsga_struct{static_cast<const Candidate&>(tg), tg.tag(), 0, {}});
     #pragma omp parallel if(parallel)
     {
-      #pragma omp single nowait
-      for(_nsga_struct& r : ref) {
+      #pragma omp single
+      for(auto& r : ref) {
         _nsga_struct* rr = &r;
         #pragma omp task firstprivate(rr)
         for(auto& s : ref)
@@ -992,12 +992,16 @@ private:
       }
     }
     size_t cur_rank = 0;
+    /* ref contains the candidates with yet unassigned rank. When this becomes
+     * empty, we're done. */
     while(ref.size() > 0) {
       std::vector<_nsga_struct> cur_front{};
       {
         auto it = ref.begin();
         auto end = ref.end();
         while(it != end) {
+          /* It *it is nondominated, move it to cur_front and remove from the
+           * list. std::list was chosen so that both operations are O(1). */
           if(it->dom_cnt == 0) {
             cur_front.push_back(std::move(*it));
             ref.erase(it++);
@@ -1005,6 +1009,7 @@ private:
             it++;
         }
       }
+      /* Break arrows from members of cur_front and assign final rank to them */
       for(auto& r : cur_front) {
         for(auto q : r.q)
           q->dom_cnt--;
