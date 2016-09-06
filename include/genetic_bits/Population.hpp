@@ -865,7 +865,7 @@ private:
 
   template<class Ret, typename T = Tag>
   typename std::enable_if<!std::is_same<T, size_t>::value, bool>::type
-  front_nsga(Ret& ret) const {
+  front_nsga(Ret&) const {
     return false;
   }
 
@@ -966,17 +966,31 @@ private:
     std::deque<_nsga_struct*> q;
   };
 
-  void NOINLINE _nsga_rate(internal::rw_lock& lock) {
+  void _nsga_rate(bool parallel = false) {
+    internal::write_lock lock(smp);
+    _nsga_rate(lock, parallel);
+    _nsgaSelect_last_mod = smp.get_mod_cnt();
+  }
+
+  void NOINLINE _nsga_rate(internal::rw_lock& lock, bool parallel = false) {
     internal::upgrade_lock up(lock);
     std::list<_nsga_struct> ref{};
     for(auto& tg : static_cast<Base&>(*this))
       ref.push_back(_nsga_struct{static_cast<const Candidate&>(tg), tg.tag(), 0, {}});
-    for(auto& r : ref)
-      for(auto& s : ref)
-        if(r.r << s.r) {
-          r.q.push_back(&s);
-          s.dom_cnt++;
-        }
+    #pragma omp parallel if(parallel)
+    {
+      #pragma omp single nowait
+      for(_nsga_struct& r : ref) {
+        _nsga_struct* rr = &r;
+        #pragma omp task firstprivate(rr)
+        for(auto& s : ref)
+          if(rr->r << s.r) {
+            rr->q.push_back(&s);
+            #pragma omp atomic
+            s.dom_cnt++;
+          }
+      }
+    }
     size_t cur_rank = 0;
     while(ref.size() > 0) {
       std::vector<_nsga_struct> cur_front{};
@@ -1029,6 +1043,49 @@ private:
   }
 
 public:
+  /** \brief Returns the whole population by reference.
+   *
+   * Note that
+   * ```
+   * Population::Ref ref = pop.ref();
+   * ```
+   * is needless because the same effect is equivalently achieved with
+   * ```
+   * Population::Ref ref(pop);
+   * ```
+   * However, the availability of an explicit cast given by this function can
+   * be used to benefit from C++11's `auto` keyword when Population has not
+   * been `typedef`'d and the type name is getting clumsy. */
+  Ref ref() const {
+    return *this;
+  }
+
+  /** \brief Returns the whole population by reference supplemented by the
+   * NSGA metainformation. The original Population does not need to be
+   * specially prepared.
+   *
+   * This creates a reference population supplemented by the NSGA tag (`Tag =
+   * sizeof_t`) and populates this by the ranks of each candidate. This is
+   * ordinarily an expensive operation (\f N^2 \f$ dominance comparisons) that
+   * would otherwise be automatically invoked in the first call to NSGASelect or
+   * NSGASelect_v. When in a multithreaded context, the thread happening to
+   * make the first call would have to block others before the assignment is
+   * done. This separate function allows precomputing it using a parallelized
+   * algorithm before the thread split.
+   *
+   * Note that any modifications to the returned population invalidate the
+   * NSGA information. If some modifications (e.g., pruning) of the references
+   * are necessary, do them on an ordinary ref() and call NSGAref on that as
+   * the last step.
+   *
+   * \param parallel controls parallelization using OpenMP (on by default) */
+  Population<Candidate, size_t, true> NSGAref(bool parallel = true) const {
+    internal::read_lock lock(smp);
+    Population<Candidate, size_t, true> ref(*this);
+    ref._nsga_rate(parallel);
+    return ref;
+  }
+
   /** \brief The return type of stat(). */
   struct Stat {
     double mean;  ///< The mean fitness of the Population.

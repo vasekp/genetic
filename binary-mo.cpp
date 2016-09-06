@@ -214,7 +214,7 @@ class Candidate: public gen::Candidate<Fitness> {
 };
 
 
-typedef gen::Population<Candidate, size_t> Population;
+typedef gen::Population<Candidate> Population;
 
 
 class CandidateFactory {
@@ -228,10 +228,10 @@ class CandidateFactory {
   static std::vector<unsigned> weights;
   std::discrete_distribution<> dFun{};
 
-  Population& pop;
+  gen::Population<Candidate, size_t, true> pop;
 
   public:
-  CandidateFactory(Population& _pop): pop(_pop) {
+  CandidateFactory(const Population& _pop): pop(_pop.NSGAref()) {
     if(weights.size() == 0) {
       weights = std::vector<unsigned>(func.size(), 1);
       normalizeWeights();
