@@ -8,8 +8,15 @@ namespace internal {
 template<class C, class It>
 class cast_iterator: public It {
   public:
+  typedef typename It::iterator_category iterator_category;
+  typedef typename It::difference_type difference_type;
+  typedef C value_type;
+  typedef C reference;
+  typedef typename std::add_pointer<C>::type pointer;
+
   cast_iterator(It it): It(it) { };
-  C operator*() const { return static_cast<C>(It::operator*()); }
+  reference operator*() const { return static_cast<C>(It::operator*()); }
+  pointer operator->() const { return &operator*(); }
 };
 
 
