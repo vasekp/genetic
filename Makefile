@@ -27,7 +27,7 @@ FLAGS += -O3
 FLAGS.b += -DBENCH -DDEBUG -O3
 FLAGS.d += -DBENCH -DDEBUG -g
 FLAGS.od += -O3 -DDEBUG -fno-inline-functions -g
-FLAGS.p += -O1 -DDEBUG -pg
+FLAGS.p += -O1 -DBENCH -DDEBUG -pg
 FLAGS.op += -O3 -DDEBUG -fno-inline-functions -pg
 
 
