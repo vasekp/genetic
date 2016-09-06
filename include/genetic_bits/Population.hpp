@@ -248,8 +248,8 @@ public:
    *
    * \param count the number of candidates to generate
    * \param src source function; one of:
-   * - `std::function<(const) Candidate>`: returning by copy,
-   * - `std::function<(const) Candidate&>`: returning by reference,
+   * - `std::function<(const) Candidate ()>`: returning by copy,
+   * - `std::function<(const) Candidate& ()>`: returning by reference,
    * - a pointer to function returning `Candidate` or `Candidate&`,
    * - a lambda function returning either.
    * \param precompute set to `true` to enable precomputing the candidates'
@@ -393,7 +393,7 @@ public:
   }
 
   /** \brief Reduces the population by selective removal of candidates.
-   * 
+   *
    * Candidates are tested for similarity according to a provided crierion
    * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
    * is kept. A minimum number of candidates can be set; if so, the procedure
@@ -455,7 +455,7 @@ public:
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
-   * 
+   *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& rankSelect(double max, Rng& rng = rng) {
@@ -595,7 +595,7 @@ public:
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
-   * 
+   *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate& fitnessSelect(double mult, Rng& rng = rng) {
@@ -712,8 +712,8 @@ public:
     return randomSelect<Rng, Candidate>(rng);
   }
 
-  /** \brief Randomly selects `k` different candidates. If `k < size()`, the
-   * whole population is returned.
+  /** \brief Randomly selects `k` different candidates. If `k ≥ size()`, the
+   * entire population is returned.
    *
    * The returned Ref remains valid until the original population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
