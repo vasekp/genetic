@@ -706,7 +706,8 @@ public:
   }
 
   /** \copybrief randomSelect(Rng&) const
-   * \brief Works like randomSelect(Rng&) const but returns by value. */
+   *
+   * Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
   Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
     return randomSelect<Rng, Candidate>(rng);
@@ -745,7 +746,8 @@ public:
   }
 
   /** \copybrief randomSelect(size_t, Rng&) const
-   * \brief Works like randomSelect(size_t, Rng&) const but returns an independent
+   *
+   * Works like randomSelect(size_t, Rng&) const but returns an independent
    * Population. */
   template<class Rng = decltype(rng)>
   Population NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
@@ -782,7 +784,8 @@ public:
   }
 
   /** \copybrief best()
-   * \brief Works like best() but returns by value. */
+   *
+   * Works like best() but returns by value. */
   Candidate best_v() {
     return best<Candidate>();
   }
@@ -844,7 +847,8 @@ public:
   }
 
   /** \copybrief front()
-   * \brief Works like front() but returns an independent Population. */
+   *
+   * Works like front() but returns an independent Population. */
   Population NOINLINE front_v(bool parallel = true) const {
     return front<Population>(parallel);
   }
