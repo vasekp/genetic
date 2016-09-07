@@ -87,7 +87,7 @@ public:
   Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
 
   /** \brief The move constructor. */
-  Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
+  Population(Population&& _p) noexcept: Base(std::move(_p)), sorted(_p.sorted) { }
 
   /** \brief Creates an empty population but preallocate space for `count`
    * candidates. */
@@ -150,7 +150,7 @@ public:
   }
 
   /** \brief Move assignment operator. */
-  Population& operator=(Population&& _p) {
+  Population& operator=(Population&& _p) noexcept {
     internal::write_lock lock(smp);
     Base::operator=(std::move(_p));
     sorted = _p.sorted;
@@ -332,9 +332,8 @@ public:
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
     internal::read_lock lock(smp);
-    if(size() <= newSize)
+    if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
-    lock.upgrade();
     ensureSorted(lock);
     const Candidate& dummy = Base::front(); // needed by resize() if size() < newSize which can't happen
     Base::resize(newSize, dummy);           // (otherwise we would need a default constructor)
@@ -349,9 +348,8 @@ public:
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
     internal::read_lock lock(smp);
-    if(size() <= newSize)
+    if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
-    lock.upgrade();
     shuffle(rng);
     const Candidate& dummy = Base::front(); // see rankTrim()
     Base::resize(newSize, dummy);
@@ -378,9 +376,8 @@ public:
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
-    if(size() <= minSize)
+    if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
-    lock.upgrade();
     if(randomize)
       shuffle(rng);
     size_t sz = size();
@@ -412,9 +409,8 @@ public:
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
-    if(size() <= minSize)
+    if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
-    lock.upgrade();
     if(randomize)
       shuffle(rng);
     size_t sz = size();
@@ -1079,6 +1075,7 @@ private:
     assert_comparable();
     if(!sorted) {
       internal::upgrade_lock up(lock);
+      if(sorted) return;
       std::sort(Base::begin(), Base::end());
       sorted = true;
     }
