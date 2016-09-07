@@ -82,18 +82,21 @@ namespace internal {
     rw_lock& operator= (rw_lock&&) = delete;
 
     public:
-    /* Important: don't rely on any information about the resource obtained
-     * prior to upgrade()! Other writers may have stepped in during the wait.
-     * This won't be any of the threads started with a writers' lock since
-     * they are waiting for *us* to finish but if more readers simultaneously
-     * want to upgrade then they will have to wait for each other.
+    /* Upgrade a read lock to a write lock, giving this thread priority over
+     * waiting write-only locks.
+     *
+     * Important: don't rely on any information about the resource obtained
+     * prior to upgrade()! If more readers simultaneously want to upgrade then
+     * they will have to wait for each other, and may get the lock in any
+     * order, changing the state visible to the other ones.
      *
      * However, a thread can check if its upgrade request was uninterrupted
-     * by other threads by comparing if s.mod_cnt raised by 1 exactly.
+     * by other threads, if necessary, by comparing if s.mod_cnt raised by 1
+     * exactly.
      *
-     * This admittedly makes a lock upgrade not much different from a read
-     * release followed by write acquire. The difference is that an upgraded
-     * lock always has priority over waiting writes. */
+     * Returns whether an upgrade happened: the returned value is false if
+     * this was already a writer lock. This is useful for a conditional
+     * downgrade() later when given a lock of unknown type. */
     bool upgrade() {
       if(write)
         return false;
@@ -111,6 +114,28 @@ namespace internal {
       // mutex lock.
       s.wq.notify_all();
       return true;
+    }
+
+    /* Upgrade if a condition is met. If another thread (with an upgraded read
+     * lock) breaks the condition in the time of obtaining the write lock,
+     * it's released again.
+     *
+     * Returns whether the upgrade was successful: when the return value is
+     * true, we (1) have a write lock and (2) are sure that cond() is true.
+     * Throws an exception if this was already a write lock, because it could
+     * not be distinguished whether the upgrade was not successful due to the
+     * condition or due to that. */
+    bool upgrade_if(std::function<bool()> cond) {
+      if(write)
+        throw std::logic_error("upgrade_if called on a write lock");
+      if(!cond())
+        return false;
+      upgrade();
+      if(!cond()) {
+        downgrade();
+        return false;
+      } else
+        return true;
     }
 
     /* Downgrade a write lock to a read lock, allowing the read to finish
