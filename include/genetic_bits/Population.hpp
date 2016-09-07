@@ -87,7 +87,7 @@ public:
   Population(const Population& _p): Base(_p), sorted(_p.sorted) { }
 
   /** \brief The move constructor. */
-  Population(Population&& _p): Base(std::move(_p)), sorted(_p.sorted) { }
+  Population(Population&& _p) noexcept: Base(std::move(_p)), sorted(_p.sorted) { }
 
   /** \brief Creates an empty population but preallocate space for `count`
    * candidates. */
@@ -150,7 +150,7 @@ public:
   }
 
   /** \brief Move assignment operator. */
-  Population& operator=(Population&& _p) {
+  Population& operator=(Population&& _p) noexcept {
     internal::write_lock lock(smp);
     Base::operator=(std::move(_p));
     sorted = _p.sorted;
