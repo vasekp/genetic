@@ -17,6 +17,8 @@ class cast_iterator: public It {
   cast_iterator(It it): It(it) { };
   reference operator*() const { return static_cast<C>(It::operator*()); }
   pointer operator->() const { return &operator*(); }
+  cast_iterator operator+(difference_type n) { return cast_iterator(It::operator+(n)); }
+  cast_iterator operator-(difference_type n) { return cast_iterator(It::operator-(n)); }
 };
 
 

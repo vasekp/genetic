@@ -45,6 +45,16 @@ struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
   CandidateTagged(gen::Candidate<CBase>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
 
   Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
+
+  friend inline bool
+  operator< (const CandidateTagged& c1, const CandidateTagged& c2) {
+    return (const gen::Candidate<CBase>&)(c1) < (const gen::Candidate<CBase>&)(c2);
+  }
+
+  friend inline bool
+  operator<< (const CandidateTagged& c1, const CandidateTagged& c2) {
+    return (const gen::Candidate<CBase>&)(c1) << (const gen::Candidate<CBase>&)(c2);
+  }
 };
 
 } // namespace internal
