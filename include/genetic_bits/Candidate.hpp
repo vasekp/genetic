@@ -2,42 +2,55 @@ namespace gen {
 
 /** \brief The Candidate template.
  *
- * Takes a typename `Fitness` which can be a simple type or a class,
- * optionally supporting `bool operator<`, representing a total ordering, or
- * `bool operator<<`, representing a partial ordering. If either of the
- * operators exist, they are extended to the Candidate type, comparing the
- * fitness of two candidates. This is used to switch accessibility of various
- * Population methods.
- *
- * The virtual implementation only keeps track of whether fitness has
- * been computed, and provides the precomputed value when available. The inner
- * function to compute fitness when required, computeFitness(), needs to be
- * provided in every derived class.
- *
- * The intended use of Candidate is illustrated by the following example:
+ * Takes a base class `CBase` which needs to implement a stateless function of
+ * signature
  * ```
- * struct Fitness { ... };
+ * Fitness CBase::fitness() const
+ * ```
+ * Here, `Fitness` can be a simple type or a class, optionally supporting
+ * `bool operator<()`, representing a total ordering, or `bool operator<<()`,
+ * representing a partial ordering. If either of the operators exist, they are
+ * extended to the Candidate type, comparing the fitness of two candidates.
+ * This is used to switch accessibility of various Population methods.
  *
- * class Candidate: public gen::Candidate<Fitness> {
- *   public:
- *     ...
- *   private:
- *     Fitness computeFitness() const { ... }
- * };
- * ``` */
-template<typename Fitness>
-class Candidate {
-  mutable Fitness _fitness{};
-  mutable bool fitnessValid = false;
+ * The value returned by Candidate::fitness() is the same as returned by its
+ * `CBase::fitness()`, with the difference that the latter is called exactly
+ * once, at the point of construction of this wrapper. This prevents methods
+ * using the fitness from repeatedly requesting the computation which is
+ * assumed to be expensive.
+ *
+ * All methods of Population<CBase> returning its members or references to
+ * them return a `Candidate<CBase>`. This can be implicitly converted to a
+ * `CBase` (or `const CBase&`), but that loses the single-evaluation
+ * guarantee. It's recommended to use `auto` or `auto&` in iterating over a
+ * Population or storing results of its function calls. */
+template<class CBase>
+class Candidate: public CBase {
+  protected:
+  /** \brief The Fitness type of this candidate, equal to the return type of
+   * CBase::fitness(). */
+  typedef decltype(std::declval<CBase>().fitness()) _Fitness;
+
+  private:
+  /* Making this const would mean deleting implicit copy and move assignments.
+   * Let's suffice with it being private and all accessor functions returning
+   * a const(&). */
+  _Fitness _fitness;
+
+  /* This is to allow Population to access _Fitness. */
+  template<class, class, bool>
+  friend class Population;
 
   public:
-  /** \brief Returns this candidate's fitness, calculating it on request if not
-   * known from before. */
-  Fitness fitness() const {
-    if(!fitnessValid) {
-      _fitness = computeFitness();
-      fitnessValid = true;
-    }
+  /** \brief Copy-initialization from a `CBase`. */
+  Candidate(const CBase& b): CBase(b), _fitness(CBase::fitness()) { }
+
+  /** \brief Move-initialization from a `CBase`. */
+  Candidate(CBase&& b): CBase(std::move(b)), _fitness(CBase::fitness()) { }
+
+  /** \brief Returns this candidate's fitness, calculated at construction
+   * time. */
+  const _Fitness& fitness() const {
     return _fitness;
   }
 
@@ -48,7 +61,7 @@ class Candidate {
    * generated if `Fitness::operator<()` does not exist or does not return a
    * boolean value. */
   friend inline bool
-  operator< (const Candidate<Fitness>& c1, const Candidate<Fitness>& c2) {
+  operator< (const Candidate& c1, const Candidate& c2) {
     return c1.fitness() < c2.fitness();
   }
 
@@ -59,22 +72,9 @@ class Candidate {
    * generated if `Fitness::operator<<()` does not exist or does not return a
    * boolean value. */
   friend inline bool
-  operator<< (const Candidate<Fitness>& c1, const Candidate<Fitness>& c2) {
+  operator<< (const Candidate& c1, const Candidate& c2) {
     return c1.fitness() << c2.fitness();
   }
-
-  virtual ~Candidate() { }
-
-  protected:
-  /** \brief The internal fitness computation, called the first time this
-   * candidate's fitness() is queried. Every derived class must implement
-   * this routine.
-   *
-   * In rare occasions it may happen that two threads ask to calculate a
-   * Candidate's fitness simultaneously. This function must be designed
-   * such that this causes no problem and must unconditionally return the
-   * same value for the same input. */
-  virtual Fitness computeFitness() const = 0;
 }; // class Candidate
 
 } // namespace gen

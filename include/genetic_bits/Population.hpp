@@ -1,17 +1,26 @@
 namespace gen {
 
+namespace internal {
+
+template<class CBase, class Tag, bool is_ref>
+using PBase = std::vector<internal::CandidateTagged<CBase, Tag, is_ref>>;
+
+} // namespace internal
+
+
 /** \brief The Population template.
  *
- * From the following parameters, only Candidate is mandatory. For most
- * purposes only `Population<Candidate>` should be needed externally. The
- * other parameters are used mainly for return types of temporary objects. For
- * any values of `Tag` and `is_ref`, `Population<Candidate, Tag, is_ref>` can be
- * implicitly converted to a `Population<Candidate>`.
+ * From the following template parameters, only `CBase` is mandatory. For most
+ * purposes only `Population<CBase>` should be needed externally. The other
+ * parameters are used mainly for return types of temporary objects. For any
+ * values of `Tag` and `is_ref`, `Population<CBase, Tag, is_ref>` can be
+ * implicitly converted to a `Population<CBase>`.
  *
- * Population can be used as a container of `Candidate`s with read-only access.
- * The functions begin() and end() are exposed, returning random access
- * iterators dereferencable to `const Candidate&` and allowing the iteration
- * patterns
+ * Population can be used as a container of `Candidate`s with read-only
+ * access. (See Candidate for discussion about the relation between a
+ * Candidate and `CBase`.) The functions begin() and end() are exposed,
+ * returning random access iterators dereferencable to `const
+ * Candidate<CBase>&` and allowing the iteration patterns
  * ```
  * for(auto& c : pop) { ... }
  * ```
@@ -22,28 +31,23 @@ namespace gen {
  * Also, read-only element accessors at() and operator[]() are available for
  * direct access to candidates.
  *
- * \tparam Candidate the class describing individual members of this
- * population. Must be derived from gen::Candidate.
+ * \tparam CBase the base class of the member candidates of this population.
+ * See Candidate for details.
  * \tparam Tag an optional supplement class or literal type to accompany each
  * candidate. Used for internal purposes. This does not enter iterations over
  * this population and is not duplicated when copies or references are taken.
  * When supplied, must represent a default-constructible type.
  * \tparam is_ref if set to `true`, this is a reference population. See
  * Population::Ref for more details. */
-template<class Candidate, class Tag = internal::empty, bool is_ref = false>
-class Population : private std::vector<internal::Tagged<Candidate, Tag, is_ref>> {
+template<class CBase, class Tag = internal::empty, bool is_ref = false>
+class Population : private internal::PBase<CBase, Tag, is_ref> {
   bool sorted = false;
   mutable internal::rw_semaphore smp{};
 
-  typedef decltype(internal::detectFT<Candidate>(nullptr)) _FitnessType;
+  typedef internal::PBase<CBase, Tag, is_ref> Base;
 
-  typedef std::vector<internal::Tagged<Candidate, Tag, is_ref>> Base;
-
-  typedef internal::cast_iterator<const Candidate&, typename Base::iterator> iterator;
-  typedef internal::cast_iterator<const Candidate&, typename Base::const_iterator> const_iterator;
-
-  static_assert(std::is_convertible<Candidate&, const gen::Candidate<_FitnessType>&>::value,
-      "The Candidate type needs to be derived from gen::Candidate.");
+  typedef internal::cast_iterator<const Candidate<CBase>&, typename Base::iterator> iterator;
+  typedef internal::cast_iterator<const Candidate<CBase>&, typename Base::const_iterator> const_iterator;
 
 public:
   /** \brief A corresponding "reference population", a helper type for
@@ -52,10 +56,10 @@ public:
    * This is the return type of functions that return a subset of an existing
    * Population by reference as it holds its members by reference rather than
    * by value. Internally it is a different Population specialization with a
-   * matching Candidate type, so the same functions including adding or
-   * erasing can be called on it despite its temporary nature and assignments
-   * between Population and Population::Ref objects are allowed and behave
-   * as expected, see add(Container&).
+   * matching CBase type, so the same functions including adding or erasing
+   * can be called on it despite its temporary nature and assignments between
+   * Population and Population::Ref objects are allowed and behave as
+   * expected, see add(Container&).
    *
    * It is guaranteed that Population::Ref::Ref is identical to
    * Population::Ref, which makes it convenient to chain selection functions,
@@ -71,7 +75,7 @@ public:
    * elements.  This includes rankSelect(), which needs to sort the contents
    * for its operation, and reserve(), which may move the contents to a new
    * memory location. */
-  typedef Population<Candidate, Tag, true> Ref;
+  typedef Population<CBase, Tag, true> Ref;
 
    /* Befriend all compatible Populations */
    template<class, class, bool>
@@ -97,29 +101,29 @@ public:
 
   /** \brief Creates a population of size `count` whose candidates are results
    * of calls to the source function `src`.
-   * \copydetails add(size_t, Source, bool, bool) */
+   * \copydetails add(size_t, Source, bool) */
   template<class Source>
-  explicit Population(size_t count, Source src, bool precompute = false, bool parallel = true) {
-    add(count, src, precompute, parallel);
+  explicit Population(size_t count, Source src, bool parallel = true) {
+    add(count, src, parallel);
   }
 
   /** \brief Initializes this population from an iterator range from a
-   * container of `Candidate`s. */
+   * container of `Candidate`s or `CBase`s. */
   template<class InputIt>
   explicit Population(InputIt first, InputIt last) {
     add(first, last);
   }
 
-  /** \brief Initializes this population from a container of `Candidate`s
-   * (e.g., a `std::vector` or another Population).
+  /** \brief Initializes this population from a container of `Candidate`s or
+   * `CBase`s (e.g., a `std::vector` or another Population).
    * \copydetails add(const Container&) */
   template<class Container>
   explicit Population(const Container& vec) {
     add(std::forward<Container>(vec));
   }
 
-  /** \brief Initializes this population from a container of `Candidate`s
-   * using move semantics, leaving the original container empty. */
+  /** \brief Initializes this population from a container of `Candidate`s or
+   * `CBase`s using move semantics, leaving the original container empty. */
   template<class Container>
   explicit Population(Container&& vec) {
     add(std::forward<Container>(vec));
@@ -129,13 +133,13 @@ public:
   /* There's no added functionality w.r.t. the above as far as the user is
    * concerned, no need to document */
   template<class Tag_, bool ref_>
-  Population(const Population<Candidate, Tag_, ref_>& _p) {
+  Population(const Population<CBase, Tag_, ref_>& _p) {
     add(_p);
     sorted = _p.sorted;
   }
 
   template<class Tag_, bool ref_>
-  Population(Population<Candidate, Tag_, ref_>&& _p) {
+  Population(Population<CBase, Tag_, ref_>&& _p) {
     add(std::move(_p));
     sorted = _p.sorted;
   }
@@ -160,7 +164,7 @@ public:
   /** \brief Copy assignment of a compatible Population.
    * \copydetails add(const Container&) */
   template<class Tag_, bool ref_>
-  Population& operator=(const Population<Candidate, Tag_, ref_>& _p) {
+  Population& operator=(const Population<CBase, Tag_, ref_>& _p) {
     internal::write_lock lock(smp);
     Base::clear();
     Base::insert(Base::end(), _p.begin(), _p.end());
@@ -170,7 +174,7 @@ public:
 
   /** \brief Move assignment of a compatible Population. */
   template<class Tag_, bool ref_>
-  Population& operator=(Population<Candidate, Tag_, ref_>&& _p) {
+  Population& operator=(Population<CBase, Tag_, ref_>&& _p) {
     internal::write_lock lock(smp);
     Base::clear();
     move_add_unguarded(_p);
@@ -221,24 +225,24 @@ public:
   }
 
   /** \brief Read-only access to a specified element (no bounds checking). */
-  const Candidate& operator[](size_t pos) const {
-    return static_cast<const Candidate&>(Base::operator[](pos));
+  const Candidate<CBase>& operator[](size_t pos) const {
+    return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
 
   /** \brief Read-only access to a specified element (with bounds checking). */
-  const Candidate& at(size_t pos) const {
-    return static_cast<const Candidate&>(Base::at(pos));
+  const Candidate<CBase>& at(size_t pos) const {
+    return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
 
   /** \brief Adds a new candidate. */
-  void add(const Candidate& c) {
+  void add(const Candidate<CBase>& c) {
     internal::write_lock lock(smp);
     Base::push_back(c);
     sorted = false;
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
-  void add(Candidate&& c) {
+  void add(Candidate<CBase>&& c) {
     internal::write_lock lock(smp);
     Base::push_back(std::move(c));
     sorted = false;
@@ -247,27 +251,23 @@ public:
   /** \brief Draws `count` candidates from a source function `src`.
    *
    * \param count the number of candidates to generate
-   * \param src source function; one of:
-   * - `std::function<(const) Candidate ()>`: returning by copy,
-   * - `std::function<(const) Candidate& ()>`: returning by reference,
-   * - a pointer to function returning `Candidate` or `Candidate&`,
-   * - a lambda function returning either.
-   * \param precompute set to `true` to enable precomputing the candidates'
-   * fitness (the evaluation is lazy by default)
+   * \param src source function; can be any callable object (e.g., a
+   * `std::function`, a function pointer, or a lambda function) returning
+   * either of `Candidate<CBase>` or `CBase` and either by value or by
+   * reference (a copy will be taken). In many cases the function
+   * call can be inlined by the optimizer if known at compile time.
    * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
-  void NOINLINE add(size_t count, Source src, bool precompute = false, bool parallel = true) {
+  void NOINLINE add(size_t count, Source src, bool parallel = true) {
     internal::write_lock lock(smp);
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
-      std::vector<Candidate> tmp{};
+      std::vector<Candidate<CBase>> tmp{};
       tmp.reserve(count*2/omp_get_num_threads());
       #pragma omp for schedule(dynamic)
       for(size_t j = 0; j < count; j++) {
-        Candidate c{src()};
-        if(precompute)
-          c.fitness();
+        Candidate<CBase> c{src()};
         tmp.push_back(c);
       }
       #pragma omp critical
@@ -276,7 +276,7 @@ public:
     sorted = false;
   }
 
-  /** \brief Copies an iterator range from a container of `Candidate`s. */
+  /** \brief Copies an iterator range from a container of candidates. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
     assert_iterator<InputIt>();
@@ -285,7 +285,7 @@ public:
     sorted = false;
   }
 
-  /** \brief Copies all candidates from a container of `Candidate`s.
+  /** \brief Copies all candidates from a container of candidates.
    *
    * If this population is a reference population, references to all members
    * of the argument are taken, copies are made otherwise. */
@@ -294,10 +294,10 @@ public:
     add(vec.begin(), vec.end());
   }
 
-  /** \brief Moves all candidates from a container of `Candidate`s.
+  /** \brief Moves all candidates from a container of candidates.
    *
    * Moves between `Population`s are only supported if source and destination
-   * are both non-reference or both reference and are of the same Candidate type. */
+   * are both non-reference or both reference and are of the same `CBase` type. */
   template<class Container>
 #ifdef DOXYGEN
   void
@@ -324,8 +324,8 @@ public:
   /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample.
    *
-   * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates a compile-time error in
+   * Applicable only if the type returned by `CBase::fitness()` allows total
+   * ordering using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \param newSize the maximum desired size of the population. If this bound
@@ -335,8 +335,8 @@ public:
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     ensureSorted(lock);
-    const Candidate& dummy = Base::front(); // needed by resize() if size() < newSize which can't happen
-    Base::resize(newSize, dummy);           // (otherwise we would need a default constructor)
+    auto& dummy = Base::front();  // needed by resize() if size() < newSize which can't happen
+    Base::resize(newSize, dummy); // (otherwise we would need a default constructor)
   }
 
   /** \brief Reduces the population to a maximum size given by the argument,
@@ -351,7 +351,7 @@ public:
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     shuffle(rng);
-    const Candidate& dummy = Base::front(); // see rankTrim()
+    auto& dummy = Base::front(); // see rankTrim()
     Base::resize(newSize, dummy);
   }
 
@@ -362,9 +362,9 @@ public:
    * of candidates can be set; if so, the procedure stops when enough
    * candidates have been removed to satisfy this bound.
    *
-   * \param test a boolean function accepting a `const Candidate` reference.
-   * If the return value is `true` the candidate is removed from the
-   * population.
+   * \param test a boolean function accepting a constant Candidate<CBase>
+   * reference. If the return value is `true` the candidate is removed from
+   * the population.
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all candidates satisfying the predicate are
    * removed.
@@ -374,7 +374,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Ignored
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
@@ -396,7 +396,7 @@ public:
    * is kept. A minimum number of candidates can be set; if so, the procedure
    * stops when enough candidates have been removed to satisfy this bound.
    *
-   * \param test a boolean function accepting two `const Candidate`
+   * \param test a boolean function accepting two constant Candidate<CBase>
    * references. Should be symmetric in its arguments. If the return value is
    * `true` the latter candidate is removed from the population.
    * \param minSize a minimum number of candidates to be kept if possible. If
@@ -407,7 +407,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Ignored
    * if `randomize` is `false`. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate&, const Candidate&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
@@ -442,8 +442,8 @@ public:
    * if another thread concurrently modifies the population. If your code
    * allows this, use rankSelect_v() instead.
    *
-   * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates a compile-time error in
+   * Applicable only if the type returned by `CBase::fitness()` allows total
+   * ordering using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \tparam fun A `constexpr` pointer to a function of signature
@@ -462,7 +462,7 @@ public:
    *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng);
+  const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng);
 
   /** \copybrief rankSelect()
    *
@@ -470,34 +470,34 @@ public:
    *
    * \returns a copy of the randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  Candidate rankSelect_v(double bias, Rng& rng = rng);
+  Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& rankSelect(double max, Rng& rng = rng) {
+  const Candidate<CBase>& rankSelect(double max, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const Candidate&>(max, rng);
+      return rankSelect_exp<const Candidate<CBase>&>(max, rng);
     else
-      return rankSelect_two<const Candidate&, &internal::eval_in_product<fun>>(max, rng);
+      return rankSelect_two<const Candidate<CBase>&, &internal::eval_in_product<fun>>(max, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& rankSelect(double bias, Rng& rng = rng) {
-    return rankSelect_two<const Candidate&, fun>(bias, rng);
+  const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng) {
+    return rankSelect_two<const Candidate<CBase>&, fun>(bias, rng);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  Candidate rankSelect_v(double bias, Rng& rng = rng) {
+  Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<Candidate>(bias, rng);
+      return rankSelect_exp<Candidate<CBase>>(bias, rng);
     else
-      return rankSelect_two<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  Candidate rankSelect_v(double bias, Rng& rng = rng) {
-    return rankSelect_two<Candidate, fun>(bias, rng);
+  Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
+    return rankSelect_two<Candidate<CBase>, fun>(bias, rng);
   }
 
 #endif
@@ -559,8 +559,8 @@ public:
    * if another thread concurrently modifies the population. If your code
    * allows this, use fitnessSelect_v() instead.
    *
-   * Applicable only if the fitness type of `Candidate` can be converted to
-   * `double`. This method generates a compile-time error in
+   * Applicable only if the type returned by `CBase::fitness()` can be
+   * converted to `double`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied.
    *
    * \tparam fun A `constexpr` pointer to a function of signature
@@ -579,7 +579,7 @@ public:
    *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  const Candidate& fitnessSelect(double bias, Rng& rng = rng);
+  const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng);
 
   /** \copybrief fitnessSelect()
    *
@@ -587,28 +587,28 @@ public:
    *
    * \returns a copy of the randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  Candidate fitnessSelect_v(double bias, Rng& rng = rng);
+  Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& fitnessSelect(double mult, Rng& rng = rng) {
-    return fitnessSelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
+  const Candidate<CBase>& fitnessSelect(double mult, Rng& rng = rng) {
+    return fitnessSelect_int<const Candidate<CBase>&, &internal::eval_in_product<fun>>(mult, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& fitnessSelect(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<const Candidate&, fun>(bias, rng);
+  const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<const Candidate<CBase>&, fun>(bias, rng);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+  Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  Candidate fitnessSelect_v(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<Candidate, fun>(bias, rng);
+  Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
+    return fitnessSelect_int<Candidate<CBase>, fun>(bias, rng);
   }
 
 #endif
@@ -630,7 +630,7 @@ private:
       lock.upgrade();
       _fitnessSelect_probs.clear();
       _fitnessSelect_probs.reserve(sz);
-      for(const Candidate& c : *this)
+      for(auto& c : *this)
         _fitnessSelect_probs.push_back(1 / fun(c.fitness(), bias));
       _fitnessSelect_dist = std::discrete_distribution<size_t>(_fitnessSelect_probs.begin(), _fitnessSelect_probs.end());
       _fitnessSelect_last_mod = smp.get_mod_cnt();
@@ -648,9 +648,9 @@ public:
    * allows this, use randomSelect_v(Rng&) const instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  const Candidate& randomSelect(Rng& rng = rng) const {
+  const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
 #else
-  template<class Rng = decltype(rng), class Ret = const Candidate&>
+  template<class Rng = decltype(rng), class Ret = const Candidate<CBase>&>
   Ret NOINLINE randomSelect(Rng& rng = rng) const {
 #endif
     internal::read_lock lock(smp);
@@ -665,8 +665,8 @@ public:
    *
    * Works like randomSelect(Rng&) const but returns by value. */
   template<class Rng = decltype(rng)>
-  Candidate NOINLINE randomSelect_v(Rng& rng = rng) const {
-    return randomSelect<Rng, Candidate>(rng);
+  Candidate<CBase> NOINLINE randomSelect_v(Rng& rng = rng) const {
+    return randomSelect<Rng, Candidate<CBase>>(rng);
   }
 
   /** \brief Randomly selects `k` different candidates. If `k ≥ size()`, the
@@ -722,13 +722,13 @@ public:
    * if another thread concurrently modifies the population. If your code
    * allows this, use best_v() instead.
    *
-   * Applicable only if the fitness type of `Candidate` allows total ordering
-   * using `operator<`. This method generates a compile-time error in
+   * Applicable only if the type returned by `CBase::fitness()` allows total
+   * ordering using `operator<`. This method generates a compile-time error in
    * specializations for which this condition is not satisfied. */
 #ifdef DOXYGEN
-  const Candidate& best() {
+  const Candidate<CBase>& best() {
 #else
-  template<class Ret = const Candidate&>
+  template<class Ret = const Candidate<CBase>&>
   Ret NOINLINE best() {
 #endif
     assert_comparable();
@@ -744,16 +744,16 @@ public:
   /** \copybrief best()
    *
    * Works like best() but returns by value. */
-  Candidate best_v() {
-    return best<Candidate>();
+  Candidate<CBase> best_v() {
+    return best<Candidate<CBase>>();
   }
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const Candidate& c, const Population& pop) {
+  friend size_t operator<< (const Candidate<CBase>& c, const Population& pop) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(const Candidate& cmp : pop)
+    for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
     return cnt;
@@ -761,10 +761,10 @@ public:
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const Population& pop, const Candidate& c) {
+  friend size_t operator<< (const Population& pop, const Candidate<CBase>& c) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
-    for(const Candidate& cmp : pop)
+    for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
     return cnt;
@@ -818,7 +818,7 @@ private:
     if(smp.get_mod_cnt() == _nsgaSelect_last_mod) {
       for(auto& tg : (Base&)(*this))
         if(tg.tag() == 0)
-          ret.add(static_cast<Candidate&>(tg));
+          ret.add(static_cast<Candidate<CBase>&>(tg));
       return true;
     } else {
       return false;
@@ -867,7 +867,7 @@ public:
    *
    * \returns a constant reference to a randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  const Candidate& NSGASelect(double bias, Rng& rng = rng);
+  const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng);
 
   /** \copybrief NSGASelect()
    *
@@ -875,35 +875,35 @@ public:
    *
    * \returns a copy of the randomly chosen candidate. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  Candidate NSGASelect_v(double bias, Rng& rng = rng);
+  Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  const Candidate& NSGASelect(double mult, Rng& rng = rng) {
-    return NSGASelect_int<const Candidate&, &internal::eval_in_product<fun>>(mult, rng);
+  const Candidate<CBase>& NSGASelect(double mult, Rng& rng = rng) {
+    return NSGASelect_int<const Candidate<CBase>&, &internal::eval_in_product<fun>>(mult, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  const Candidate& NSGASelect(double bias, Rng& rng = rng) {
-    return NSGASelect_int<const Candidate&, fun>(bias, rng);
+  const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng) {
+    return NSGASelect_int<const Candidate<CBase>&, fun>(bias, rng);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  Candidate NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<Candidate, &internal::eval_in_product<fun>>(bias, rng);
+  Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
+    return NSGASelect_int<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  Candidate NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<Candidate, fun>(bias, rng);
+  Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
+    return NSGASelect_int<Candidate<CBase>, fun>(bias, rng);
   }
 
 #endif
 
 private:
   struct _nsga_struct {
-    const Candidate& r; // reference to a candidate
+    const Candidate<CBase>& r; // reference to a candidate
     size_t& rank;       // reference to its Tag in the original population
     size_t dom_cnt;     // number of candidates dominating this
     std::deque<_nsga_struct*> q;  // candidates dominated by this
@@ -923,7 +923,7 @@ private:
     internal::upgrade_lock up(lock);
     std::list<_nsga_struct> ref{};
     for(auto& tg : static_cast<Base&>(*this))
-      ref.push_back(_nsga_struct{static_cast<const Candidate&>(tg), tg.tag(), 0, {}});
+      ref.push_back(_nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
     #pragma omp parallel if(parallel)
     {
       #pragma omp single
@@ -1031,9 +1031,9 @@ public:
    * the last step.
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
-  Population<Candidate, size_t, true> NSGAref(bool parallel = true) const {
+  Population<CBase, size_t, true> NSGAref(bool parallel = true) const {
     internal::read_lock lock(smp);
-    Population<Candidate, size_t, true> ref(*this);
+    Population<CBase, size_t, true> ref(*this);
     ref._nsga_rate(parallel);
     return ref;
   }
@@ -1060,7 +1060,7 @@ public:
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock(smp);
-    for(const Candidate &c : *this) {
+    for(auto& c : *this) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;
@@ -1088,19 +1088,19 @@ private:
   }
 
   static void assert_double() {
-    static_assert(std::is_convertible<_FitnessType, double>::value,
+    static_assert(std::is_convertible<typename Candidate<CBase>::_Fitness, double>::value,
         "This method requires the fitness type to be convertible to double.");
   }
 
   static void assert_comparable() {
-    static_assert(internal::comparable<_FitnessType>(0),
+    static_assert(internal::comparable<typename Candidate<CBase>::_Fitness>(0),
         "This method requires the fitness type to implement an operator<.");
   }
 
   template<class InputIt>
   static void assert_iterator() {
-    static_assert(std::is_convertible<typename InputIt::reference, const Candidate&>::value,
-        "The provided iterator does not return Candidate.");
+    static_assert(std::is_convertible<typename InputIt::reference, const Candidate<CBase>&>::value,
+        "The provided iterator does not return Candidate<CBase>.");
   }
 
   static void assert_sztag() {

@@ -40,20 +40,6 @@ namespace internal {
   template<typename>
   constexpr bool dominable(...) { return false; }
 
-
-  /* Helper for detecting if a Candidate is a class derived from
-   * gen::Candidate or a reference_wrapper of some */
-
-  template<typename C>
-  decltype(std::declval<C>().fitness()) detectFT(C*);
-
-  template<typename C>
-  // Returning C is a trick; void would break Candidate<_FitnessType> in
-  // the static_assert of Population.hpp. This works as well, if C is not a
-  // Candidate<?> then C& is not convertible to const Candidate<C>& (or should
-  // not be).
-  C detectFT(...);
-
 } // namespace internal
 
 } // namespace gen

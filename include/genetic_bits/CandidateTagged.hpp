@@ -25,27 +25,25 @@ struct TagWrap<empty>: empty {
 };
 
 
+/* The base class for CandidateTagged. */
+template<class CBase, bool ref>
+using CTBase = typename std::conditional<ref,
+                 std::reference_wrapper<const gen::Candidate<CBase>>,
+                 gen::Candidate<CBase>
+               >::type;
+
+
 /* This is the element type of the std::vector underlying gen::Population. If
  * ref is false, it holds a Candidate and a Tag. If ref is true, it holds a
  * reference to a Candidate and an (independent) Tag. The user should never
  * encounter this mechanism directly as it transparently casts to a const
  * Candidate&. */
-template<class Candidate, typename Tag, bool ref>
-class Tagged :
-public std::conditional<ref,
-           std::reference_wrapper<const Candidate>,
-           Candidate
-       >::type,
-private TagWrap<Tag> {
+template<class CBase, typename Tag, bool ref>
+struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
+  CandidateTagged(const gen::Candidate<CBase>& _c): CTBase<CBase, ref>(_c) { }
 
-  typedef typename std::conditional<ref,
-    std::reference_wrapper<const Candidate>,
-    Candidate
-  >::type Base;
+  CandidateTagged(gen::Candidate<CBase>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
 
-public:
-  Tagged(const Candidate& _c): Base(_c) { }
-  Tagged(Candidate&& _c): Base(std::move(_c)) { }
   Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
 };
 
