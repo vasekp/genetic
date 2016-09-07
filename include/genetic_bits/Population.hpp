@@ -290,7 +290,12 @@ public:
    * If this population is a reference population, references to all members
    * of the argument are taken, copies are made otherwise. */
   template<class Container>
-  void NOINLINE add(const Container& vec) {
+#ifdef DOXYGEN
+  void
+#else
+  typename std::enable_if<internal::is_container<Container>(0), void>::type
+#endif
+  NOINLINE add(const Container& vec) {
     add(vec.begin(), vec.end());
   }
 
@@ -302,7 +307,10 @@ public:
 #ifdef DOXYGEN
   void
 #else
-  typename std::enable_if<std::is_rvalue_reference<Container&&>::value, void>::type
+  typename std::enable_if<
+      internal::is_container<Container>(0) &&
+      std::is_rvalue_reference<Container&&>::value,
+    void>::type
 #endif
   NOINLINE add(Container&& vec) {
     internal::write_lock lock(smp);

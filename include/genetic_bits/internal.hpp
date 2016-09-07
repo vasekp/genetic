@@ -40,6 +40,19 @@ namespace internal {
   template<typename>
   constexpr bool dominable(...) { return false; }
 
+
+  /* Helper for Population::add(Container&) and Population::add(Container&&) */
+
+  template<class C>
+  constexpr auto is_container(int) ->
+    typename std::enable_if<std::is_same<
+      decltype(std::declval<C>().begin()),
+      decltype(std::declval<C>().end())>::value,
+    bool>::type { return true; }
+
+  template<class>
+  constexpr bool is_container(...) { return false; }
+
 } // namespace internal
 
 } // namespace gen
