@@ -1011,7 +1011,7 @@ public:
    * ```
    * However, the availability of an explicit cast given by this function can
    * be used to benefit from C++11's `auto` keyword when Population has not
-   * been `typedef`'d and the type name is getting clumsy. */
+   * been `typedef`'d and the type name is getting too long. */
   Ref ref() const {
     return *this;
   }
@@ -1022,12 +1022,12 @@ public:
    *
    * This creates a reference population supplemented by the NSGA tag (`Tag =
    * sizeof_t`) and populates this by the ranks of each candidate. This is
-   * ordinarily an expensive operation (\f N^2 \f$ dominance comparisons) that
-   * would otherwise be automatically invoked in the first call to NSGASelect or
-   * NSGASelect_v. When in a multithreaded context, the thread happening to
-   * make the first call would have to block others before the assignment is
-   * done. This separate function allows precomputing it using a parallelized
-   * algorithm before the thread split.
+   * ordinarily an expensive operation (<i>N</i><sup>2</sup> dominance
+   * comparisons) that would otherwise be automatically invoked in the first
+   * call to NSGASelect or NSGASelect_v. When in a multithreaded context, the
+   * thread happening to make the first call would have to block others before
+   * the assignment is done. This separate function allows precomputing it
+   * using a parallelized algorithm before the thread split.
    *
    * Note that any modifications to the returned population invalidate the
    * NSGA information. If some modifications (e.g., pruning) of the references
