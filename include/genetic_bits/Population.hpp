@@ -689,6 +689,8 @@ public:
 #endif
     internal::read_lock lock(smp);
     size_t sz = size();
+    if(k >= sz)
+      return Ret(*this);
     k = std::min(k, sz);
     std::vector<size_t> idx(sz);
     /* Fisher-Yates intentionally without initialization! */
