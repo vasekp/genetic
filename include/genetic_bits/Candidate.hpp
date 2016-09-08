@@ -26,20 +26,25 @@ namespace gen {
  * Population or storing results of its function calls. */
 template<class CBase>
 class Candidate: public CBase {
-  protected:
-  /** \brief The Fitness type of this candidate, equal to the return type of
-   * CBase::fitness(). */
-  typedef decltype(std::declval<CBase>().fitness()) _Fitness;
 
-  private:
+public:
+
+  struct Traits {
+
+    using FitnessType = decltype(std::declval<CBase>().fitness());
+
+    constexpr static bool is_comparable = internal::comparable<FitnessType>(0);
+
+    constexpr static bool is_dominable = internal::dominable<FitnessType>(0);
+
+    constexpr static bool is_float = std::is_convertible<FitnessType, double>::value;
+
+  };
+
   /* Making this const would mean deleting implicit copy and move assignments.
    * Let's suffice with it being private and all accessor functions returning
    * a const(&). */
-  _Fitness _fitness;
-
-  /* This is to allow Population to access _Fitness. */
-  template<class, class, bool>
-  friend class Population;
+  typename Traits::FitnessType _fitness;
 
   public:
   /** \brief Copy-initialization from a `CBase`. */
@@ -50,7 +55,7 @@ class Candidate: public CBase {
 
   /** \brief Returns this candidate's fitness, calculated at construction
    * time. */
-  const _Fitness& fitness() const {
+  const typename Traits::FitnessType& fitness() const {
     return _fitness;
   }
 

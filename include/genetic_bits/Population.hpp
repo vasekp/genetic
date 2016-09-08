@@ -1096,12 +1096,12 @@ private:
   }
 
   static void assert_double() {
-    static_assert(std::is_convertible<typename Candidate<CBase>::_Fitness, double>::value,
+    static_assert(Candidate<CBase>::Traits::is_float,
         "This method requires the fitness type to be convertible to double.");
   }
 
   static void assert_comparable() {
-    static_assert(internal::comparable<typename Candidate<CBase>::_Fitness>(0),
+    static_assert(Candidate<CBase>::Traits::is_comparable,
         "This method requires the fitness type to implement an operator<.");
   }
 
