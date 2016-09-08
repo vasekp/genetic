@@ -40,9 +40,13 @@ using CTBase = typename std::conditional<ref,
  * Candidate&. */
 template<class CBase, typename Tag, bool ref>
 struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
+
+  using reference = const gen::Candidate<CBase>&;
+  using rv_reference = CTBase<CBase, ref>&&;
+
   CandidateTagged(const gen::Candidate<CBase>& _c): CTBase<CBase, ref>(_c) { }
 
-  CandidateTagged(gen::Candidate<CBase>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
+  CandidateTagged(CTBase<CBase, ref>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
 
   Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
 

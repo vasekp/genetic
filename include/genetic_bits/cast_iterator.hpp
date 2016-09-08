@@ -29,12 +29,14 @@ class move_iterator: public std::move_iterator<It> {
   explicit move_iterator(It it): std::move_iterator<It>(it) { }
 };
 
+/* The move iterator needs to return a Candidate&& or a
+ * std::reference_wrapper<Candidate>&&. */
 template<class C, class It>
 class move_iterator<cast_iterator<C, It>>:
-public cast_iterator<typename std::decay<C>::type&&, It> {
+public cast_iterator<typename It::value_type::rv_reference, It> {
   public:
   explicit move_iterator(cast_iterator<C, It> it):
-    cast_iterator<typename std::decay<C>::type&&, It>(it) { }
+      cast_iterator<typename It::value_type::rv_reference, It>(it) { }
 };
 
 } // namespace internal
