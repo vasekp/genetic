@@ -46,8 +46,8 @@ class Population : private internal::PBase<CBase, Tag, is_ref> {
 
   typedef internal::PBase<CBase, Tag, is_ref> Base;
 
-  typedef internal::cast_iterator<const Candidate<CBase>&, typename Base::iterator> iterator;
-  typedef internal::cast_iterator<const Candidate<CBase>&, typename Base::const_iterator> const_iterator;
+  typedef internal::CTIterator<typename Base::iterator> iterator;
+  typedef internal::CTIterator<typename Base::const_iterator> const_iterator;
 
 public:
   /** \brief A corresponding "reference population", a helper type for
