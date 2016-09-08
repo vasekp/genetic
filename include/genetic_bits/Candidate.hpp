@@ -19,7 +19,7 @@ namespace gen {
  * using the fitness from repeatedly requesting the computation which is
  * assumed to be expensive.
  *
- * All methods of Population<CBase> returning its members or references to
+ * All methods of `Population<CBase>` returning its members or references to
  * them return a `Candidate<CBase>`. This can be implicitly converted to a
  * `CBase` (or `const CBase&`), but that loses the single-evaluation
  * guarantee. It's recommended to use `auto` or `auto&` in iterating over a

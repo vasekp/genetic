@@ -214,7 +214,7 @@ class Candidate {
 };
 
 
-typedef gen::Population<Candidate> Population;
+typedef gen::NSGAPopulation<Candidate> Population;
 typedef gen::Candidate<Candidate> GenCandidate;
 
 
@@ -229,10 +229,10 @@ class CandidateFactory {
   static std::vector<unsigned> weights;
   std::discrete_distribution<> dFun{};
 
-  gen::Population<Candidate, size_t, true> pop;
+  Population& pop;
 
   public:
-  CandidateFactory(const Population& _pop): pop(_pop.NSGAref()) {
+  CandidateFactory(Population& _pop): pop(_pop) {
     if(weights.size() == 0) {
       weights = std::vector<unsigned>(func.size(), 1);
       normalizeWeights();
@@ -604,6 +604,7 @@ int main() {
 
     /* Top up to popSize2 candidates, precomputing fitnesses */
     Population pop2(Config::popSize2);
+    pop.precompute();
     CandidateFactory cf{pop};
     pop2.add(Config::popSize2 - nd, [&]() -> const Candidate { return cf.getNew(); }, true);
 
