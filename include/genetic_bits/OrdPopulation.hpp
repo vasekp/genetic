@@ -27,38 +27,6 @@ public:
   /** \brief Creates an empty population. */
   OrdPopulation() = default;
 
-  /** \brief The copy constructor. */
-  OrdPopulation(const OrdPopulation& _p): Base(_p) {
-    if(_p.is_sorted_g())
-      set_sorted_g();
-  }
-
-  /** \brief The move constructor. */
-  OrdPopulation(OrdPopulation&& _p) noexcept: Base(std::move(_p)) {
-    if(_p.is_sorted_g())
-      set_sorted_g();
-  }
-
-  /* TODO locks */
-  /** \brief Copy assignment of a compatible OrdPopulation.
-   * \copydetails add(const Container&) */
-  template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  OrdPopulation& operator=(const OrdPopulation<CBase, ref_, Tag_, Pop_>& _p) {
-    Base::operator=(std::move(_p));
-    if(_p.is_sorted_g())
-      set_sorted_g();
-    return *this;
-  }
-
-  /** \brief Move assignment of a compatible OrdPopulation. */
-  template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  OrdPopulation& operator=(OrdPopulation<CBase, ref_, Tag_, Pop_>&& _p) {
-    Base::operator=(std::move(_p));
-    if(_p.is_sorted_g())
-      set_sorted_g();
-    return *this;
-  }
-
   /** \copydoc BasePopulation::reserve */
   void reserve(size_t count) {
     Base::reserve(count);
@@ -87,7 +55,7 @@ public:
     internal::read_lock lock(smp);
     if(this->empty())
       throw std::out_of_range("best(): BasePopulation is empty.");
-    if(is_sorted_ug())
+    if(is_sorted())
       return Base2::front();
     else
       return *std::min_element(begin(), end());
@@ -226,44 +194,34 @@ public:
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
     internal::read_lock lock(smp);
-    bool was_sorted = is_sorted_ug();
+    bool was_sorted = is_sorted();
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     ensure_sorted(lock);
     auto& dummy = Base2::front();  // needed by resize() if size() < newSize which can't happen
     Base2::resize(newSize, dummy); // (otherwise we would need a default constructor)
     if(was_sorted)
-      set_sorted_ug();
+      set_sorted();
   }
 
 private:
 
-  bool is_sorted_ug() const {
+  bool is_sorted() const {
     return smp.get_mod_cnt() == last_sort_mod;
   }
 
-  bool is_sorted_g() const {
-    internal::read_lock lock(smp);
-    return is_sorted_ug();
-  }
-
-  void set_sorted_ug() {
+  void set_sorted() {
     last_sort_mod = smp.get_mod_cnt();
   }
 
-  void set_sorted_g() {
-    internal::write_lock lock(smp);
-    set_sorted_ug();
-  }
-
   void ensure_sorted(internal::rw_lock& lock) {
-    if(!is_sorted_ug()) {
+    if(!is_sorted()) {
       internal::upgrade_lock up(lock);
       ++last_sort_mod;
-      if(is_sorted_ug())
+      if(is_sorted())
         return;
       std::sort(Base2::begin(), Base2::end());
-      set_sorted_ug();
+      set_sorted();
     }
   }
 
