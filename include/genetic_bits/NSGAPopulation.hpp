@@ -1,5 +1,13 @@
 namespace gen {
 
+/** \brief A variant of Population enabling nondominance sorting and related
+ * selection methods.
+ *
+ * \tparam CBase the base class of the member candidates of this population.
+ * Must implement a partial (dominance) order given by a <b>bool operator<<()</b>.
+ * See Candidate for further details.
+ * \tparam is_ref if set to \b true, this is a reference population. See \link
+ * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
 class NSGAPopulation : public DomPopulation<CBase, is_ref, size_t, NSGAPopulation> {
 
@@ -18,6 +26,7 @@ public:
   /** \brief Creates an empty population. */
   NSGAPopulation() = default;
 
+  /** \copydoc DomPopulation::front() */
 #ifdef DOXYGEN
   Ref front(bool parallel = true) const {
 #else
@@ -37,9 +46,7 @@ public:
     return Base::template front<Ret>(parallel);
   }
 
-  /** \copybrief front()
-   *
-   * Works like front() but returns an independent BasePopulation. */
+  /** \copydoc DomPopulation::front_v() */
   typename Base::Val front_v(bool parallel = true) const {
     return front<typename Base::Val>(parallel);
   }
@@ -192,6 +199,17 @@ private:
 
 public:
 
+  /** \brief Updates the metainformation about the NSGA rank of each
+   * candidate.
+   *
+   * This happens by default whenever NSGASelect() is called after the
+   * population has been modified. However, since the sorting is a rather
+   * expensive operation, in a multithreaded setting this would mean all other
+   * threads have to wait for the calling thread to finish the sorting before
+   * proceeding. This method can be called before the work is split between
+   * threads, and as such, can benefit from parallelization itself.
+   *
+   * \param parallel controls parallelization using OpenMP (on by default) */
   void precompute(bool parallel = true) {
     internal::write_lock lock(smp);
     _nsga_rate(lock, parallel);

@@ -8,37 +8,19 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 } // namespace internal
 
 
-/** \brief The BasePopulation template.
- *
- * From the following template parameters, only `CBase` is mandatory. For most
- * purposes only `BasePopulation<CBase>` should be needed externally. The other
- * parameters are used mainly for return types of temporary objects. For any
- * values of `Tag` and `is_ref`, `BasePopulation<CBase, Tag, is_ref>` can be
- * implicitly converted to a `BasePopulation<CBase>`.
- *
- * BasePopulation can be used as a container of `Candidate`s with read-only
- * access. (See Candidate for discussion about the relation between a
- * Candidate and `CBase`.) The functions begin() and end() are exposed,
- * returning random access iterators dereferencable to `const
- * Candidate<CBase>&` and allowing the iteration patterns
- * ```
- * for(auto& c : pop) { ... }
- * ```
- * and
- * ```
- * for(auto c : pop) { ... }
- * ```
- * Also, read-only element accessors at() and operator[]() are available for
- * direct access to candidates.
+/** \brief The BasePopulation template, covering functionality common to all
+ * the derived Population classes.
  *
  * \tparam CBase the base class of the member candidates of this population.
  * See Candidate for details.
- * \tparam Tag an optional supplement class or literal type to accompany each
- * candidate. Used for internal purposes. This does not enter iterations over
- * this population and is not duplicated when copies or references are taken.
- * When supplied, must represent a default-constructible type.
- * \tparam is_ref if set to `true`, this is a reference population. See
- * BasePopulation::Ref for more details. */
+ * \tparam is_ref if set to \b true, this is a reference population. See
+ * BasePopulation::Ref for more details.
+ * \tparam Tag a class or literal type to accompany each candidate, used for
+ * internal purposes. This does not enter iterations over this population and
+ * is not duplicated when copies or references are taken. Must represent a
+ * default-constructible type.
+ * \tparam Population the outer Population type this should behave like.
+ * Controls the return type of selection functions. */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class BasePopulation : protected internal::PBase<CBase, is_ref, Tag> {
 
@@ -55,18 +37,18 @@ protected:
 
 public:
   /** \brief A corresponding "reference population", a helper type for
-   * functions returning a selection from an existing BasePopulation.
+   * functions returning a selection from an existing population.
    *
    * This is the return type of functions that return a subset of an existing
-   * BasePopulation by reference as it holds its members by reference rather than
-   * by value. Internally it is a different BasePopulation specialization with a
+   * population by reference as it holds its members by reference rather than
+   * by value. Internally it is another Population specialization with a
    * matching CBase type, so the same functions including adding or erasing
    * can be called on it despite its temporary nature and assignments between
-   * BasePopulation and BasePopulation::Ref objects are allowed and behave as
+   * Population and \b Population::Ref objects are allowed and behave as
    * expected, see add(Container&).
    *
-   * It is guaranteed that BasePopulation::Ref::Ref is identical to
-   * BasePopulation::Ref, which makes it convenient to chain selection functions,
+   * It is guaranteed that \b Population::Ref::Ref is identical to
+   * \b Population::Ref, which makes it convenient to chain selection functions,
    * e.g.
    * ```
    * pop.randomSelect(5).front().randomSelect()
@@ -75,26 +57,41 @@ public:
    *
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
-   * BasePopulation, namely all operations adding, removing, and reordering its
-   * elements.  This includes rankSelect(), which needs to sort the contents
-   * for its operation, and reserve(), which may move the contents to a new
-   * memory location. */
+   * population, namely all operations adding, removing, and reordering its
+   * elements.  This includes \link gen::OrdPopulation::rankSelect()
+   * rankSelect() \endlink, which needs to sort the contents for its
+   * operation, and reserve(), which may move the contents to a new memory
+   * location. */
   typedef Population<CBase, true> Ref;
+
+  /** \brief A corresponding "value population", a helper type for functions
+   * returning a selection from an existing population by value.
+   *
+   * In the case of a \link gen::Population Population<CBase> \endlink this
+   * will be identical to the calling class. However, when requested from a
+   * \link Ref reference population \endlink, this will remove the reference
+   * character thereof, so that elements stored in this type may outlive their
+   * original source.
+   *
+   * It is guaranteed that \b Population::Val::Val = \b Population::Ref::Val =
+   * \b Population::Val. */
   typedef Population<CBase, false> Val;
 
   /** \brief Creates an empty population. */
   BasePopulation() = default;
 
+#ifndef DOXYGEN
   /* The copy and move constructors: trivial but we need explicit definition
-   * because the semaphore can't be default copied or moved */
+   * because the semaphore can't be default copied or moved. They are defined
+   * implicitly in any other *Population so let's not draw extra attention to
+   * these in particular. */
 
-  /** \brief The copy constructor. */
   BasePopulation(const BasePopulation& _p): Base(_p) { }
 
-  /** \brief The move constructor. */
   BasePopulation(BasePopulation&& _p) noexcept: Base(std::move(_p)) { }
+#endif
 
-  /** \brief Creates an empty population but preallocate space for `count`
+  /** \brief Creates an empty population but preallocates space for `count`
    * candidates. */
   explicit BasePopulation(size_t count) {
     Base::reserve(count);
@@ -133,35 +130,37 @@ public:
   /* NB: the difference in the following two constructors is that they are
    * implicit. */
 
-  /** \brief Initializes this population from a compatible BasePopulation.
+  /** \brief Initializes this population from a compatible population.
    * \copydetails add(const Container&) */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
     add(_p);
   }
 
-  /** \brief Initializes this population from a compatible BasePopulation
+  /** \brief Initializes this population from a compatible population
    * using move semantics, leaving the original container empty. */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
     add(std::move(_p));
   }
 
-  /** \brief Copy assignment operator. */
+#ifndef DOXYGEN
+  /* Copy and move assignment operators. Ditto as c&m constructors. */
+
   BasePopulation& operator=(const BasePopulation& _p) {
     internal::write_lock lock(smp);
     Base::operator=(_p);
     return *this;
   }
 
-  /** \brief Move assignment operator. */
   BasePopulation& operator=(BasePopulation&& _p) noexcept {
     internal::write_lock lock(smp);
     Base::operator=(std::move(_p));
     return *this;
   }
+#endif
 
-  /** \brief Copy assignment of a compatible BasePopulation.
+  /** \brief Copy assignment of a compatible population.
    * \copydetails add(const Container&) */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation& operator=(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
@@ -171,7 +170,7 @@ public:
     return *this;
   }
 
-  /** \brief Move assignment of a compatible BasePopulation. */
+  /** \brief Move assignment of a compatible population. */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation& operator=(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
     internal::write_lock lock(smp);
@@ -294,7 +293,7 @@ public:
 
   /** \brief Moves all candidates from a container of candidates.
    *
-   * Moves between `BasePopulation`s are only supported if source and destination
+   * Moves between populations are only supported if source and destination
    * are both non-reference or both reference and are of the same `CBase` type. */
   template<class Container>
 #ifdef DOXYGEN
@@ -475,6 +474,8 @@ public:
   Val NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
     return randomSelect<Val>(k, rng);
   }
+
+private:
 
   template<class Rng = decltype(rng)>
   void shuffle(Rng& rng) {

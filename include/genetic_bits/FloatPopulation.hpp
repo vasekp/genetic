@@ -1,5 +1,8 @@
 namespace gen {
 
+/** \brief The FloatPopulation template, adding functionality dependent on the
+ * candidates' fitness being convertible to a simple floating point type.
+ * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class FloatPopulation : public OrdPopulation<CBase, is_ref, Tag, Population> {
 
@@ -111,7 +114,7 @@ private:
 
 public:
 
-  /** \brief The return type of stat(). */
+  /** \brief The return type of FloatPopulation::stat(). */
   struct Stat {
     double mean;  ///< The mean fitness of the BasePopulation.
     double stdev; ///< The standard deviation of fitness in the BasePopulation.
@@ -125,8 +128,7 @@ public:
    * generates a compile-time error in specializations for which this
    * condition is not satisfied.
    *
-   * \see Stat
-   */
+   * \see Stat */
   Stat stat() const {
     if(this->empty())
       throw std::out_of_range("stat(): BasePopulation is empty.");

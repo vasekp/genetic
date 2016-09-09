@@ -29,6 +29,7 @@ class Candidate: public CBase {
 
 public:
 
+#ifndef DOXYGEN
   struct Traits {
 
     using FitnessType = decltype(std::declval<CBase>().fitness());
@@ -40,13 +41,17 @@ public:
     constexpr static bool is_float = std::is_convertible<FitnessType, double>::value;
 
   };
+#endif
+
+private:
 
   /* Making this const would mean deleting implicit copy and move assignments.
    * Let's suffice with it being private and all accessor functions returning
    * a const(&). */
   typename Traits::FitnessType _fitness;
 
-  public:
+public:
+
   /** \brief Copy-initialization from a `CBase`. */
   Candidate(const CBase& b): CBase(b), _fitness(CBase::fitness()) { }
 

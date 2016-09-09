@@ -1,11 +1,11 @@
 namespace gen {
 
-template<class CBase, bool is_ref = false>
-  class Population;
+template<class, bool>
+class Population;
 
 namespace internal {
 
-template<class CBase, bool is_ref = false>
+template<class CBase, bool is_ref>
 using PopulationChooser = typename std::conditional<
   Candidate<CBase>::Traits::is_comparable,
   typename std::conditional<
@@ -35,8 +35,33 @@ using PopulationChooser = typename std::conditional<
  * - BasePopulation in all other cases (this is the subclass of the above
  *   three).
  *
- * See the documentation of the above classes for more detailed description. */
-template<class CBase, bool is_ref>
+ * A Population can be used as a container of \link Candidate Candidates
+ * \endlink with read-only access. (See Candidate for discussion about the
+ * relation between a Candidate and \b CBase.) The functions \link
+ * BasePopulation::begin() begin() \endlink and \link BasePopulation::end()
+ * end() \endlink are exposed, returning random access iterators dereferencing
+ * to <b>const \link Candidate Candidate<CBase> \endlink&</b> and allowing the
+ * iteration patterns
+ * ```
+ * for(auto& c : pop) { ... }
+ * ```
+ * and
+ * ```
+ * for(auto c : pop) { ... }
+ * ```
+ * Also, read-only element accessors \link BasePopulation::at() at() \endlink
+ * and \link BasePopulation::operator[]() operator[]() \endlink are available
+ * for direct access to candidates.
+ *
+ * See the documentation of the above classes for more detailed description.
+ *
+ * \tparam CBase the base class of the member candidates of this population.
+ * See Candidate for details.
+ * \tparam is_ref if set to \b true, this is a reference population. See
+ * BasePopulation::Ref for more details.
+ *
+ * \see NSGAPopulation */
+template<class CBase, bool is_ref = true>
 class Population : public internal::PopulationChooser<CBase, is_ref> {
 
   typedef internal::PopulationChooser<CBase, is_ref> Base;

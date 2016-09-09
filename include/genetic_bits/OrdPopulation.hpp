@@ -1,5 +1,8 @@
 namespace gen {
 
+/** \brief The OrdPopulation template, adding functionality dependent on total
+ * ordering between candidates to a BasePopulation.
+ * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class OrdPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
 
@@ -17,7 +20,7 @@ public:
   using Base::size;
   using Base::operator[];
 
-  /* Befriend all compatible OrdPopulations */
+  /* Befriend all compatible OrdPopulations for access to their is_sorted() */
   template<class, bool, class, template<class, bool> class>
   friend class OrdPopulation;
 
@@ -56,6 +59,7 @@ public:
     return *this;
   }
 
+  /** \copydoc BasePopulation::reserve */
   void reserve(size_t count) {
     Base::reserve(count);
     ++last_sort_mod;
@@ -114,10 +118,6 @@ public:
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
    * allows this, use rankSelect_v() instead.
-   *
-   * Applicable only if the type returned by `CBase::fitness()` allows total
-   * ordering using `operator<`. This method generates a compile-time error in
-   * specializations for which this condition is not satisfied.
    *
    * \tparam fun A `constexpr` pointer to a function of signature
    * either `double(*)(double)` or `double(*)(double, double)`. In the former
@@ -221,10 +221,6 @@ public:
 
   /** \brief Reduces the population to a maximum size given by the argument,
    * dropping the worst part of the sample.
-   *
-   * Applicable only if the type returned by `CBase::fitness()` allows total
-   * ordering using `operator<`. This method generates a compile-time error in
-   * specializations for which this condition is not satisfied.
    *
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
