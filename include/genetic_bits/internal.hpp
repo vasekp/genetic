@@ -41,18 +41,17 @@ namespace internal {
   constexpr bool dominable(...) { return false; }
 
 
-  /* Helper for detecting if a Candidate is a class derived from
-   * gen::Candidate or a reference_wrapper of some */
+  /* Helper for Population::add(Container&) and Population::add(Container&&) */
 
-  template<typename C>
-  decltype(std::declval<C>().fitness()) detectFT(C*);
+  template<class C>
+  constexpr auto is_container(int) ->
+    typename std::enable_if<std::is_same<
+      decltype(std::declval<C>().begin()),
+      decltype(std::declval<C>().end())>::value,
+    bool>::type { return true; }
 
-  template<typename C>
-  // Returning C is a trick; void would break Candidate<_FitnessType> in
-  // the static_assert of Population.hpp. This works as well, if C is not a
-  // Candidate<?> then C& is not convertible to const Candidate<C>& (or should
-  // not be).
-  C detectFT(...);
+  template<class>
+  constexpr bool is_container(...) { return false; }
 
 } // namespace internal
 

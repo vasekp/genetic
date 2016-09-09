@@ -133,7 +133,7 @@ class Gene {
 };
 
 
-class Candidate: public gen::Candidate<float> {
+class Candidate {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
@@ -144,6 +144,27 @@ class Candidate: public gen::Candidate<float> {
   Candidate(std::vector<Gene>& _gt) = delete;
 
   Candidate(std::vector<Gene>&& _gt): gt(std::move(_gt)) { }
+
+  float NOINLINE fitness() const {
+    register unsigned work;
+    unsigned cmp;
+    unsigned mism = 0;
+    for(int in = 0; in < (1 << Config::nIn); in++) {
+      work = in;
+      for(const Gene& g : gt)
+        work = g.apply(work);
+      cmp = in | (Config::f(in) << Config::nIn);
+      mism += hamming(work ^ cmp);
+      mism += (Config::pnIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
+    }
+    float penalty = gt.size()*Config::pnLength;
+    for(const Gene& g : gt) {
+      unsigned h = g.weight();
+      penalty += h*h*Config::pnControl;
+    }
+    count++;
+    return mism + penalty;
+  }
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
     for(auto it = c.gt.begin(); it != c.gt.end(); it++)
@@ -168,27 +189,6 @@ class Candidate: public gen::Candidate<float> {
   friend class CandidateFactory;
 
   private:
-  float NOINLINE computeFitness() const {
-    register unsigned work;
-    unsigned cmp;
-    unsigned mism = 0;
-    for(int in = 0; in < (1 << Config::nIn); in++) {
-      work = in;
-      for(const Gene& g : gt)
-        work = g.apply(work);
-      cmp = in | (Config::f(in) << Config::nIn);
-      mism += hamming(work ^ cmp);
-      mism += (Config::pnIn - 1) * hamming((work & ((1 << Config::nIn) - 1)) ^ in);
-    }
-    float penalty = gt.size()*Config::pnLength;
-    for(const Gene& g : gt) {
-      unsigned h = g.weight();
-      penalty += h*h*Config::pnControl;
-    }
-    count++;
-    return mism + penalty;
-  }
-
   inline static uint32_t hamming(register uint32_t x) {
     /* http://stackoverflow.com/a/14555819/1537925 */
     x -= ((x >> 1) & 0x55555555);
@@ -583,14 +583,14 @@ int main() {
     /* Create popSize2 children in parallel and admix parents */
     Population pop2(Config::popSize + Config::popSize2);
     CandidateFactory cf{pop};
-    pop2.add(Config::popSize2, [&]() -> const Candidate { return cf.getNew(); }, true);
+    pop2.add(Config::popSize2, [&] { return cf.getNew(); }, true);
 
     /* Finally merge pop via move semantics, we don't need it anymore. */
     pop2.add(std::move(pop));
 
     /* Trim down to popSize using rankSelect */
-    pop = Population(Config::popSize - 1, [&]() -> const Candidate& {
-      const Candidate &c = pop2.rankSelect(Config::trimBias);
+    pop = Population(Config::popSize - 1, [&] {
+      auto &c = pop2.rankSelect(Config::trimBias);
       CandidateFactory::hit(c.getOrigin());
       return c;
     });
@@ -599,7 +599,7 @@ int main() {
     pop.add(pop2.best());
 
     /* Summarize */
-    const Candidate &best = pop.best();
+    auto &best = pop.best();
     Population::Stat stat = pop.stat();
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       "fitness " << stat.mean << " ± " << stat.stdev << ", "

@@ -148,7 +148,7 @@ struct Fitness {
 };
 
 
-class Candidate: public gen::Candidate<Fitness> {
+class Candidate {
   std::vector<Gene> gt{};
   int origin = -1;
   static std::atomic_ulong count;
@@ -159,6 +159,28 @@ class Candidate: public gen::Candidate<Fitness> {
   Candidate(std::vector<Gene>& _gt) = delete;
 
   Candidate(std::vector<Gene>&& _gt): gt(std::move(_gt)) { }
+
+  NOINLINE Fitness fitness() const {
+    register unsigned work;
+    unsigned cmp, diff;
+    unsigned misIn = 0, misOut = 0;
+    for(int in = 0; in < (1 << Config::nIn); in++) {
+      work = in;
+      for(const Gene& g : gt)
+        work = g.apply(work);
+      cmp = in | (Config::f(in) << Config::nIn);
+      diff = work ^ cmp;
+      misIn += hamming(diff & ((1 << Config::nIn) - 1));
+      misOut += hamming(diff >> Config::nIn);
+    }
+    unsigned ctrl = 0;
+    for(const Gene& g : gt) {
+      unsigned h = g.weight();
+      ctrl += h*h;
+    }
+    count++;
+    return {misIn, misOut, gt.size(), ctrl};
+  }
 
   friend std::ostream& operator<< (std::ostream& os, const Candidate& c) {
     for(auto it = c.gt.begin(); it != c.gt.end(); it++)
@@ -183,28 +205,6 @@ class Candidate: public gen::Candidate<Fitness> {
   friend class CandidateFactory;
 
   private:
-  NOINLINE Fitness computeFitness() const {
-    register unsigned work;
-    unsigned cmp, diff;
-    unsigned misIn = 0, misOut = 0;
-    for(int in = 0; in < (1 << Config::nIn); in++) {
-      work = in;
-      for(const Gene& g : gt)
-        work = g.apply(work);
-      cmp = in | (Config::f(in) << Config::nIn);
-      diff = work ^ cmp;
-      misIn += hamming(diff & ((1 << Config::nIn) - 1));
-      misOut += hamming(diff >> Config::nIn);
-    }
-    unsigned ctrl = 0;
-    for(const Gene& g : gt) {
-      unsigned h = g.weight();
-      ctrl += h*h;
-    }
-    count++;
-    return {misIn, misOut, gt.size(), ctrl};
-  }
-
   inline static uint32_t hamming(register uint32_t x) {
     /* http://stackoverflow.com/a/14555819/1537925 */
     x -= ((x >> 1) & 0x55555555);
@@ -214,7 +214,8 @@ class Candidate: public gen::Candidate<Fitness> {
 };
 
 
-typedef gen::Population<Candidate> Population;
+typedef gen::NSGAPopulation<Candidate> Population;
+typedef gen::Candidate<Candidate> GenCandidate;
 
 
 class CandidateFactory {
@@ -228,10 +229,10 @@ class CandidateFactory {
   static std::vector<unsigned> weights;
   std::discrete_distribution<> dFun{};
 
-  gen::Population<Candidate, size_t, true> pop;
+  Population& pop;
 
   public:
-  CandidateFactory(const Population& _pop): pop(_pop.NSGAref()) {
+  CandidateFactory(Population& _pop): pop(_pop) {
     if(weights.size() == 0) {
       weights = std::vector<unsigned>(func.size(), 1);
       normalizeWeights();
@@ -603,6 +604,7 @@ int main() {
 
     /* Top up to popSize2 candidates, precomputing fitnesses */
     Population pop2(Config::popSize2);
+    pop.precompute();
     CandidateFactory cf{pop};
     pop2.add(Config::popSize2 - nd, [&]() -> const Candidate { return cf.getNew(); }, true);
 
@@ -610,9 +612,9 @@ int main() {
     pop2.add(nondom);
     pop = std::move(pop2);
 
-    for(const Candidate& c : pop.front().randomSelect(Config::popSize))
+    for(auto& c : pop.front().randomSelect(Config::popSize))
       CandidateFactory::hit(c.getOrigin());
-    pop.prune([](const Candidate& a, const Candidate& b) -> bool {
+    pop.prune([](const GenCandidate& a, const GenCandidate& b) -> bool {
       return a.fitness() == b.fitness();
       });
 
@@ -621,7 +623,7 @@ int main() {
     std::cout << Colours::bold() << "Gen " << gen << ": " << Colours::reset() <<
       nondom.size() << " nondominated";
     if(nondom.size() > 0) {
-      const Candidate& e = nondom.randomSelect();
+      auto& e = nondom.randomSelect();
       std::cout << ", e.g. " << e.fitness() << ' ' << e;
     }
     std::cout << std::endl;
@@ -640,7 +642,7 @@ int main() {
   /*Population nondom = pop.front();
   std::cout << nondom.size() << " nondominated";
   if(nondom.size() > 0) {
-    const Candidate& e = nondom.randomSelect();
+    auto& e = nondom.randomSelect();
     std::cout << ", e.g. " << e.fitness() << ' ' << e << std::endl;;
     e.dump(std::cout);
   } else
@@ -653,10 +655,10 @@ int main() {
   /* Delete candidates with duplicate fitnesses */
   auto nondom = pop.front();
   std::cout << std::endl << nondom.size() << " nondominated candidates, ";
-  nondom.prune([](const Candidate& a, const Candidate& b) -> bool {
+  nondom.prune([](const GenCandidate& a, const GenCandidate& b) -> bool {
       return a.fitness() == b.fitness();
     });
   std::cout << nondom.size() << " unique fitnesses:" << std::endl;
-  for(const Candidate& c : nondom)
+  for(auto& c : nondom)
     std::cout << c.fitness() << ' ' << c << std::endl;
 }

@@ -57,7 +57,7 @@ size_t Fitness::tAccept;
 size_t Fitness::tReject;
 
 
-class Candidate: public gen::Candidate<Fitness> {
+class Candidate {
   std::string reS{};  /* The string representation of this regex */
   std::regex re{};    /* The internal representation */
   bool valid = false;
@@ -75,6 +75,19 @@ class Candidate: public gen::Candidate<Fitness> {
     catch(std::regex_error e) {
       /* Thrown by std::regex constructor ⇒ not valid */
     }
+  }
+
+  Fitness fitness() const {
+    if(!valid)
+      return Fitness{-1, -1, 0};
+    int cntA = 0, cntR = 0;
+    for(auto &str : Context::dbAccept)
+      if(!std::regex_match(str, re))
+        cntA++;
+    for(auto &str : Context::dbReject)
+      if(std::regex_match(str, re))
+        cntR++;
+    return Fitness{cntA, cntR, reS.length()};
   }
 
   std::string getRE() const {
@@ -101,20 +114,6 @@ class Candidate: public gen::Candidate<Fitness> {
     str[ix] = Context::pool[
       std::uniform_int_distribution<>(0, Context::pool.length())(gen::rng)];
     return Candidate(str);
-  }
-
-  private:
-  Fitness computeFitness() const {
-    if(!valid)
-      return Fitness{-1, -1, 0};
-    int cntA = 0, cntR = 0;
-    for(auto &str : Context::dbAccept)
-      if(!std::regex_match(str, re))
-        cntA++;
-    for(auto &str : Context::dbReject)
-      if(std::regex_match(str, re))
-        cntR++;
-    return Fitness{cntA, cntR, reS.length()};
   }
 };
 
