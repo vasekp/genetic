@@ -18,7 +18,7 @@ using PopulationChooser = typename std::conditional<
     DomPopulation<CBase, is_ref, internal::empty, gen::Population>,
     BasePopulation<CBase, is_ref, internal::empty, gen::Population>
   >::type
->::type;
+>::type; // type alias PopulationChooser
 
 } // namespace internal
 
@@ -62,14 +62,14 @@ using PopulationChooser = typename std::conditional<
  *
  * \see NSGAPopulation */
 template<class CBase, bool is_ref = true>
-class Population : public internal::PopulationChooser<CBase, is_ref> {
+class Population: public internal::PopulationChooser<CBase, is_ref> {
 
   typedef internal::PopulationChooser<CBase, is_ref> Base;
 
-  public:
+public:
 
   using Base::Base;
 
-};
+}; // class Population
 
 } // namespace gen

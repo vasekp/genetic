@@ -4,7 +4,7 @@ namespace gen {
  * candidates' fitness being convertible to a simple floating point type.
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
-class FloatPopulation : public OrdPopulation<CBase, is_ref, Tag, Population> {
+class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
 
   typedef OrdPopulation<CBase, is_ref, Tag, Population> Base;
 

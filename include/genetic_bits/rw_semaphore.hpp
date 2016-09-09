@@ -3,20 +3,22 @@ namespace gen {
 /* Internal functions only to be used from other sources in this directory. */
 namespace internal {
 
-  /* Writers preference */
-  struct rw_semaphore {
-    /* Invariants:
-     *  mutex free ⇒ semaphore members and resource constant
-     *  pers_lock free ⇒ no active writes (resource constant)
-     *  w = 0 ⇔ no writers waiting
-     *  r = 0 ⇔ no readers active
-     *  w → 0 ⇒ rq notified
-     *  r → 0 ⇒ wq notified
-     *  cnt = cache_cnt ⇒ res = cache_res
-     *  write active ⇒ r = 0, w > 0, pers_lock, cnt > cache_cnt
-     * Corollary:
-     *  see rw_lock::upgrade()! */
-    protected:
+  /*** Writers' preference ***/
+  /* Invariants:
+   *  mutex free ⇒ semaphore members and resource constant
+   *  pers_lock free ⇒ no active writes (resource constant)
+   *  w = 0 ⇔ no writers waiting
+   *  r = 0 ⇔ no readers active
+   *  w → 0 ⇒ rq notified
+   *  r → 0 ⇒ wq notified
+   *  cnt = cache_cnt ⇒ res = cache_res
+   *  write active ⇒ r = 0, w > 0, pers_lock, cnt > cache_cnt
+   * Corollary:
+   *  see rw_lock::upgrade()! */
+  class rw_semaphore {
+
+  protected:
+
     std::mutex m{};  // protects both the members of this and the resource
     unsigned r{0}, w{0};  // active readers, waiting writers
     std::condition_variable rq{}, wq{};  // read queue, write queue
@@ -24,7 +26,8 @@ namespace internal {
 
     friend class rw_lock;
 
-    public:
+  public:
+
     rw_semaphore() { }
 
     /* Copy: creates a new semaphore but keeps mod_cnt
@@ -48,15 +51,18 @@ namespace internal {
     }
 
     size_t get_mod_cnt() { return mod_cnt; }
-  };
+
+  }; // class rw_semaphore
 
 
   class rw_lock {
+
     rw_semaphore& s;
     std::unique_lock<std::mutex> pers_lock{};
     bool write{false};
 
-    protected:
+  protected:
+
     rw_lock(rw_semaphore& _s, bool _w): s(_s), write(_w) {
       if(write) {
         // Logic: write creates a persistent lock, preventing other writes from
@@ -96,7 +102,8 @@ namespace internal {
     rw_lock& operator= (const rw_lock&) = delete;
     rw_lock& operator= (rw_lock&&) = delete;
 
-    public:
+  public:
+
     /* Upgrade a read lock to a write lock, giving this thread priority over
      * waiting write-only locks.
      *
@@ -166,24 +173,33 @@ namespace internal {
       // Other waiting reads can proceed now, the write is done
       s.rq.notify_all();
     }
-  };
+
+  }; // class rw_lock
 
 
   class read_lock: public rw_lock {
-    public:
+
+  public:
     read_lock(rw_semaphore& s): rw_lock(s, false) { }
-  };
+
+  }; // class read_lock
+
 
   class write_lock: public rw_lock {
-    public:
+
+  public:
     write_lock(rw_semaphore& s): rw_lock(s, true) { }
-  };
+
+  }; // class write_lock
+
 
   class upgrade_lock {
+
     rw_lock& l;
     bool u{false};
 
-    public:
+  public:
+
     upgrade_lock(rw_lock& _l): l(_l) {
       u = l.upgrade();
     }
@@ -192,7 +208,8 @@ namespace internal {
       if(u)
         l.downgrade();
     }
-  };
+
+  }; // class upgrade_lock
 
 } // namespace internal
 

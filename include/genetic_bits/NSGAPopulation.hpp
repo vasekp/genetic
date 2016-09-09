@@ -10,7 +10,7 @@ namespace gen {
  * \tparam is_ref if set to \b true, this is a reference population. See \link
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
-class NSGAPopulation : public DomPopulation<CBase, is_ref, size_t, NSGAPopulation> {
+class NSGAPopulation: public DomPopulation<CBase, is_ref, size_t, NSGAPopulation> {
 
   static_assert(Candidate<CBase>::Traits::is_dominable,
       "The fitness type of CBase needs to support bool operator<<()!");

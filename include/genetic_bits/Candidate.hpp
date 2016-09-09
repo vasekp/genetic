@@ -85,6 +85,7 @@ public:
   operator<< (const Candidate& c1, const Candidate& c2) {
     return c1.fitness() << c2.fitness();
   }
+
 }; // class Candidate
 
 } // namespace gen

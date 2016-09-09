@@ -22,20 +22,21 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
  * \tparam Population the outer Population type this should behave like.
  * Controls the return type of selection functions. */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
-class BasePopulation : protected internal::PBase<CBase, is_ref, Tag> {
+class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
 
   typedef internal::PBase<CBase, is_ref, Tag> Base;
 
   typedef internal::CTIterator<typename Base::iterator> iterator;
   typedef internal::CTIterator<typename Base::const_iterator> const_iterator;
 
-#ifndef DOXYGEN
 protected:
 
+#ifndef DOXYGEN
   mutable internal::rw_semaphore smp{};
 #endif
 
 public:
+
   /** \brief A corresponding "reference population", a helper type for
    * functions returning a selection from an existing population.
    *
@@ -310,6 +311,7 @@ public:
   }
 
 private:
+
   template<class Container>
   void NOINLINE move_add_unguarded(Container&& vec) {
     Base::insert(Base::end(),

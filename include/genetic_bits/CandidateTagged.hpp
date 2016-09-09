@@ -9,11 +9,16 @@ struct empty { };
 /* Wrapper for non-class Tags */
 template<typename Tag>
 struct TagWrap {
+
   Tag t;
+
   TagWrap(): t() { }
+
   TagWrap(Tag& _t): t(_t) { }
+
   operator Tag&() { return t; }
-};
+
+}; // class TagWrap
 
 /* This specialization is an empty class, as a base it will take no extra
  * memory. (This would not hold if there was a named member like in the
@@ -21,8 +26,10 @@ struct TagWrap {
  * requests the tag. */
 template<>
 struct TagWrap<empty>: empty {
+
   TagWrap(...) { }
-};
+
+}; // class TagWrap
 
 
 
@@ -40,7 +47,7 @@ using CTBase = typename std::conditional<ref,
  * encounter this mechanism directly as it transparently casts to a const
  * Candidate&. */
 template<class CBase, bool ref, typename Tag>
-struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
+struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   using reference = const gen::Candidate<CBase>&;
   using rv_reference = CTBase<CBase, ref>&&;
@@ -60,7 +67,8 @@ struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
   operator<< (const CandidateTagged& c1, const CandidateTagged& c2) {
     return (const gen::Candidate<CBase>&)(c1) << (const gen::Candidate<CBase>&)(c2);
   }
-};
+
+}; // class CandidateTagged
 
 
 
@@ -69,7 +77,9 @@ struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
  * Candidate&& or std::reference_wrapper<Candidate>&&.) */
 template<class It, bool move = false>
 class CTIterator: public It {
-  public:
+
+public:
+
   typedef typename std::conditional<move,
     typename It::value_type::rv_reference,
     typename It::value_type::reference>::type Target;
@@ -84,23 +94,29 @@ class CTIterator: public It {
   pointer operator->() const { return &operator*(); }
   CTIterator operator+(difference_type n) { return CTIterator(It::operator+(n)); }
   CTIterator operator-(difference_type n) { return CTIterator(It::operator-(n)); }
-};
+
+}; // class CTIterator
 
 
 /* We need a specialization of std::move_iterator for our CTIterator. */
 template<class It>
 class move_iterator: public std::move_iterator<It> {
-  public:
+
+public:
+
   explicit move_iterator(It it): std::move_iterator<It>(it) { }
-};
+
+}; // class move_iterator<CTIterator>
 
 template<class It>
-class move_iterator<CTIterator<It, false>>:
-public CTIterator<It, true> {
-  public:
+class move_iterator<CTIterator<It, false>>: public CTIterator<It, true> {
+
+public:
+
   explicit move_iterator(CTIterator<It> it):
       CTIterator<It, true>(it) { }
-};
+
+}; // class move_iterator<CTIterator>
 
 } // namespace internal
 

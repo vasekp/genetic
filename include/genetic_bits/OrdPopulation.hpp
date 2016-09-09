@@ -4,7 +4,7 @@ namespace gen {
  * ordering between candidates to a BasePopulation.
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
-class OrdPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
+class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
   typedef internal::PBase<CBase, is_ref, Tag> Base2;
