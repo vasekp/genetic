@@ -27,10 +27,25 @@ namespace internal {
     public:
     rw_semaphore() { }
 
-    rw_semaphore(const rw_semaphore&) = delete;
-    rw_semaphore(rw_semaphore&&) = delete;
-    rw_semaphore& operator= (const rw_semaphore&) = delete;
-    rw_semaphore& operator= (rw_semaphore&&) = delete;
+    /* Copy: creates a new semaphore but keeps mod_cnt
+     * (so that if (x,s) are copies of (x_,s_) where x_.last_mod_cnt =
+     * s_.get_mod_cnt() then x.last_mod_cnt = s.get_mod_cnt() */
+    rw_semaphore(const rw_semaphore& s_): mod_cnt(s_.mod_cnt) { }
+
+    /* Move: everything can be reused */
+    rw_semaphore(rw_semaphore&&) = default;
+
+    rw_semaphore& operator= (const rw_semaphore& s_) {
+      mod_cnt = s_.mod_cnt;
+      return *this;
+    }
+
+    rw_semaphore& operator= (rw_semaphore&&) = default;
+
+    ~rw_semaphore() noexcept(false) {
+      if(r != 0 || w != 0)
+        throw std::logic_error("Semaphore destroyed in use!");
+    }
 
     size_t get_mod_cnt() { return mod_cnt; }
   };
