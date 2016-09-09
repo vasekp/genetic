@@ -3,7 +3,8 @@ namespace gen {
 /** \brief The DomPopulation template, adding functionality dependent on
  * partial (dominance) ordering between candidates to a BasePopulation.
  * \copydetails gen::BasePopulation */
-template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
 class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
@@ -23,7 +24,8 @@ public:
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const Candidate<CBase>& c, const DomPopulation& pop) {
+  friend size_t operator<< (const Candidate<CBase>& c,
+      const DomPopulation& pop) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)
@@ -34,7 +36,8 @@ public:
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const DomPopulation& pop, const Candidate<CBase>& c) {
+  friend size_t operator<< (const DomPopulation& pop,
+      const Candidate<CBase>& c) {
     size_t cnt = 0;
     internal::read_lock lock(pop.smp);
     for(auto& cmp : pop)

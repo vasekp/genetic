@@ -3,7 +3,8 @@ namespace gen {
 /** \brief The FloatPopulation template, adding functionality dependent on the
  * candidates' fitness being convertible to a simple floating point type.
  * \copydetails gen::BasePopulation */
-template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
 class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
 
   using Base = OrdPopulation<CBase, is_ref, Tag, Population>;
@@ -72,7 +73,10 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double mult, Rng& rng = rng) {
-    return fitnessSelect_int<const Candidate<CBase>&, &internal::eval_in_product<fun>>(mult, rng);
+    return fitnessSelect_int<
+      const Candidate<CBase>&,
+      &internal::eval_in_product<fun>
+    >(mult, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -82,7 +86,10 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
+    return fitnessSelect_int<
+      Candidate<CBase>,
+      &internal::eval_in_product<fun>
+    >(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -101,13 +108,15 @@ private:
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): Population is empty.");
     internal::read_lock fit_lock(fit_smp);
-    if(fitnessSelect_last_mod != smp.get_mod_cnt() || bias != fitnessSelect_last_bias) {
+    if(fitnessSelect_last_mod != smp.get_mod_cnt()
+       || bias != fitnessSelect_last_bias) {
       fit_lock.upgrade();
       fitnessSelect_probs.clear();
       fitnessSelect_probs.reserve(sz);
       for(auto& c : *this)
         fitnessSelect_probs.push_back(1 / fun(c.fitness(), bias));
-      fitnessSelect_dist = std::discrete_distribution<size_t>(fitnessSelect_probs.begin(), fitnessSelect_probs.end());
+      fitnessSelect_dist = std::discrete_distribution<size_t>
+        (fitnessSelect_probs.begin(), fitnessSelect_probs.end());
       fitnessSelect_last_mod = smp.get_mod_cnt();
       fitnessSelect_last_bias = bias;
     }

@@ -3,7 +3,8 @@ namespace gen {
 /** \brief The OrdPopulation template, adding functionality dependent on total
  * ordering between candidates to a BasePopulation.
  * \copydetails gen::BasePopulation */
-template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
 class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
@@ -131,7 +132,10 @@ public:
     if(internal::is_exp<fun>::value)
       return rankSelect_exp<const Candidate<CBase>&>(max, rng);
     else
-      return rankSelect_two<const Candidate<CBase>&, &internal::eval_in_product<fun>>(max, rng);
+      return rankSelect_two<
+        const Candidate<CBase>&,
+        &internal::eval_in_product<fun>
+      >(max, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -144,7 +148,10 @@ public:
     if(internal::is_exp<fun>::value)
       return rankSelect_exp<Candidate<CBase>>(bias, rng);
     else
-      return rankSelect_two<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
+      return rankSelect_two<
+        Candidate<CBase>,
+        &internal::eval_in_product<fun>
+      >(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -183,7 +190,8 @@ private:
       rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
         rankSelect_probs.push_back(1 / fun((double)(i+1) / sz, bias));
-      rankSelect_dist = std::discrete_distribution<size_t>(rankSelect_probs.begin(), rankSelect_probs.end());
+      rankSelect_dist = std::discrete_distribution<size_t>
+        (rankSelect_probs.begin(), rankSelect_probs.end());
       rankSelect_last_sz = sz;
       rankSelect_last_bias = bias;
     }

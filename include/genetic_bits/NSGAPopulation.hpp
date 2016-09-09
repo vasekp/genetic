@@ -10,7 +10,9 @@ namespace gen {
  * \tparam is_ref if set to \b true, this is a reference population. See \link
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
-class NSGAPopulation: public DomPopulation<CBase, is_ref, size_t, NSGAPopulation> {
+class NSGAPopulation:
+  public DomPopulation<CBase, is_ref, size_t, NSGAPopulation>
+{
 
   static_assert(Candidate<CBase>::Traits::is_dominable,
       "The fitness type of CBase needs to support bool operator<<()!");
@@ -109,7 +111,10 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double mult, Rng& rng = rng) {
-    return NSGASelect_int<const Candidate<CBase>&, &internal::eval_in_product<fun>>(mult, rng);
+    return NSGASelect_int<
+      const Candidate<CBase>&,
+      &internal::eval_in_product<fun>
+    >(mult, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -119,7 +124,10 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<Candidate<CBase>, &internal::eval_in_product<fun>>(bias, rng);
+    return NSGASelect_int<
+      Candidate<CBase>,
+      &internal::eval_in_product<fun>
+    >(bias, rng);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
@@ -141,7 +149,12 @@ private:
   void NOINLINE nsga_rate(bool parallel = false) {
     std::list<nsga_struct> ref{};
     for(auto& tg : static_cast<Base2&>(*this))
-      ref.push_back(nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
+      ref.push_back(nsga_struct{
+        static_cast<const Candidate<CBase>&>(tg),
+        tg.tag(),
+        0,
+        {}
+      });
     #pragma omp parallel if(parallel)
     {
       #pragma omp single
@@ -174,7 +187,8 @@ private:
             it++;
         }
       }
-      /* Break arrows from members of cur_front and assign final rank to them */
+      /* Break arrows from members of cur_front and assign final rank to
+       * them */
       for(auto& r : cur_front) {
         for(auto q : r.q)
           q->dom_cnt--;
@@ -199,7 +213,8 @@ private:
       nsga_probs.reserve(sz);
       for(auto& tg : static_cast<Base2&>(*this))
         nsga_probs.push_back(1 / fun(tg.tag(), bias));
-      nsga_dist = std::discrete_distribution<size_t>(nsga_probs.begin(), nsga_probs.end());
+      nsga_dist = std::discrete_distribution<size_t>
+        (nsga_probs.begin(), nsga_probs.end());
       nsga_last_mod = smp.get_mod_cnt();
       nsga_last_bias = bias;
     }

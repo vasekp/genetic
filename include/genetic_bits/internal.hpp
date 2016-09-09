@@ -22,8 +22,10 @@ namespace internal {
   template<typename C>
   constexpr auto comparable(int) ->
     typename std::enable_if<
-      std::is_convertible<decltype(std::declval<C>() < std::declval<C>()), bool>::value,
-    bool>::type { return true; }
+      std::is_convertible<
+        decltype(std::declval<C>() < std::declval<C>()), bool
+      >::value, bool
+    >::type { return true; }
 
   template<typename>
   constexpr bool comparable(...) { return false; }
@@ -34,8 +36,10 @@ namespace internal {
   template<typename C>
   constexpr auto dominable(int) ->
     typename std::enable_if<
-      std::is_convertible<decltype(std::declval<C>() << std::declval<C>()), bool>::value,
-    bool>::type { return true; }
+      std::is_convertible<
+        decltype(std::declval<C>() << std::declval<C>()), bool
+      >::value, bool
+    >::type { return true; }
 
   template<typename>
   constexpr bool dominable(...) { return false; }
@@ -45,10 +49,12 @@ namespace internal {
 
   template<class C>
   constexpr auto is_container(int) ->
-    typename std::enable_if<std::is_same<
-      decltype(std::declval<C>().begin()),
-      decltype(std::declval<C>().end())>::value,
-    bool>::type { return true; }
+    typename std::enable_if<
+      std::is_same<
+        decltype(std::declval<C>().begin()),
+        decltype(std::declval<C>().end())
+      >::value, bool
+    >::type { return true; }
 
   template<class>
   constexpr bool is_container(...) { return false; }

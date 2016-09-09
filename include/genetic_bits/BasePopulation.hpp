@@ -21,7 +21,8 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
  * default-constructible type.
  * \tparam Population the outer Population type this should behave like.
  * Controls the return type of selection functions. */
-template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
 class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
 
   using Base = internal::PBase<CBase, is_ref, Tag>;
@@ -49,8 +50,8 @@ public:
    * expected, see add(const Container&) and add(Container&&).
    *
    * It is guaranteed that \b Population::Ref::Ref is identical to
-   * \b Population::Ref, which makes it convenient to chain selection functions,
-   * e.g.
+   * \b Population::Ref, which makes it convenient to chain selection
+   * functions, e.g.
    * ```
    * pop.randomSelect(5).front().randomSelect()
    * ```
@@ -268,7 +269,9 @@ public:
         tmp.push_back(c);
       }
       #pragma omp critical
-      Base::insert(Base::end(), std::make_move_iterator(tmp.begin()), std::make_move_iterator(tmp.end()));
+      Base::insert(Base::end(),
+          std::make_move_iterator(tmp.begin()),
+          std::make_move_iterator(tmp.end()));
     }
   }
 
@@ -366,7 +369,8 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate<CBase>&),
+      size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
@@ -401,7 +405,8 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
+      size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
@@ -448,8 +453,8 @@ public:
     return randomSelect<Candidate<CBase>>(rng);
   }
 
-  /** \brief Randomly selects \b k different candidates. If <b>k ≥ size()</b>, the
-   * entire population is returned.
+  /** \brief Randomly selects \b k different candidates. If <b>k ≥ size()</b>,
+   * the entire population is returned.
    *
    * The returned \link Ref \endlink remains valid until the original
    * population is modified.  Therefore there is a risk of invalidating it in

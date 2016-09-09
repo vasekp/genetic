@@ -56,16 +56,18 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   CandidateTagged(CTBase<CBase, ref>&& c): CTBase<CBase, ref>(std::move(c)) { }
 
-  Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
+  Tag& tag() {
+    return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this));
+  }
 
   friend inline bool
   operator< (const CandidateTagged& c1, const CandidateTagged& c2) {
-    return (const gen::Candidate<CBase>&)(c1) < (const gen::Candidate<CBase>&)(c2);
+    return static_cast<reference>(c1) < static_cast<reference>(c2);
   }
 
   friend inline bool
   operator<< (const CandidateTagged& c1, const CandidateTagged& c2) {
-    return (const gen::Candidate<CBase>&)(c1) << (const gen::Candidate<CBase>&)(c2);
+    return static_cast<reference>(c1) << static_cast<reference>(c2);
   }
 
 }; // class CandidateTagged
@@ -91,10 +93,22 @@ public:
   using pointer           = typename std::add_pointer<Target>::type;
 
   CTIterator(It it): It(it) { };
-  reference operator*() const { return static_cast<Target>(It::operator*()); }
-  pointer operator->() const { return &operator*(); }
-  CTIterator operator+(difference_type n) { return CTIterator(It::operator+(n)); }
-  CTIterator operator-(difference_type n) { return CTIterator(It::operator-(n)); }
+
+  reference operator*() const {
+    return static_cast<Target>(It::operator*());
+  }
+
+  pointer operator->() const {
+    return &operator*();
+  }
+
+  CTIterator operator+(difference_type n) {
+    return CTIterator(It::operator+(n));
+  }
+
+  CTIterator operator-(difference_type n) {
+    return CTIterator(It::operator-(n));
+  }
 
 }; // class CTIterator
 
@@ -114,8 +128,7 @@ class move_iterator<CTIterator<It, false>>: public CTIterator<It, true> {
 
 public:
 
-  explicit move_iterator(CTIterator<It> it):
-      CTIterator<It, true>(it) { }
+  explicit move_iterator(CTIterator<It> it): CTIterator<It, true>(it) { }
 
 }; // class move_iterator<CTIterator>
 

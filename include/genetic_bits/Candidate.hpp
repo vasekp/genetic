@@ -36,11 +36,14 @@ public:
 
     using FitnessType = decltype(std::declval<CBase>().fitness());
 
-    constexpr static bool is_comparable = internal::comparable<FitnessType>(0);
+    constexpr static bool is_comparable =
+      internal::comparable<FitnessType>(0);
 
-    constexpr static bool is_dominable = internal::dominable<FitnessType>(0);
+    constexpr static bool is_dominable =
+      internal::dominable<FitnessType>(0);
 
-    constexpr static bool is_float = std::is_convertible<FitnessType, double>::value;
+    constexpr static bool is_float =
+      std::is_convertible<FitnessType, double>::value;
 
   };
 #endif
