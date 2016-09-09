@@ -24,10 +24,10 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
 
-  typedef internal::PBase<CBase, is_ref, Tag> Base;
+  using Base = internal::PBase<CBase, is_ref, Tag>;
 
-  typedef internal::CTIterator<typename Base::iterator> iterator;
-  typedef internal::CTIterator<typename Base::const_iterator> const_iterator;
+  using iterator = internal::CTIterator<typename Base::iterator>;
+  using const_iterator = internal::CTIterator<typename Base::const_iterator>;
 
 protected:
 
@@ -63,7 +63,7 @@ public:
    * rankSelect() \endlink, which needs to sort the contents for its
    * operation, and reserve(), which may move the contents to a new memory
    * location. */
-  typedef Population<CBase, true> Ref;
+  using Ref = Population<CBase, true>;
 
   /** \brief A corresponding "value population", a helper type for functions
    * returning a selection from an existing population by value.
@@ -76,7 +76,7 @@ public:
    *
    * It is guaranteed that \b Population::Val::Val = \b Population::Ref::Val =
    * \b Population::Val. */
-  typedef Population<CBase, false> Val;
+  using Val = Population<CBase, false>;
 
   /** \brief Creates an empty population. */
   BasePopulation() = default;

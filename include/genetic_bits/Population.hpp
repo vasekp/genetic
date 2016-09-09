@@ -64,7 +64,7 @@ using PopulationChooser = typename std::conditional<
 template<class CBase, bool is_ref = true>
 class Population: public internal::PopulationChooser<CBase, is_ref> {
 
-  typedef internal::PopulationChooser<CBase, is_ref> Base;
+  using Base = internal::PopulationChooser<CBase, is_ref>;
 
 public:
 

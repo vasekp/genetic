@@ -6,8 +6,8 @@ namespace gen {
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
-  typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
-  typedef internal::PBase<CBase, is_ref, Tag> Base2;
+  using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Base2 = internal::PBase<CBase, is_ref, Tag>;
 
 public:
 

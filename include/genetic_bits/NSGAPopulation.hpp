@@ -15,8 +15,8 @@ class NSGAPopulation: public DomPopulation<CBase, is_ref, size_t, NSGAPopulation
   static_assert(Candidate<CBase>::Traits::is_dominable,
       "The fitness type of CBase needs to support bool operator<<()!");
 
-  typedef DomPopulation<CBase, is_ref, size_t, NSGAPopulation> Base;
-  typedef internal::PBase<CBase, is_ref, size_t> Base2;
+  using Base = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
+  using Base2 = internal::PBase<CBase, is_ref, size_t>;
 
   /* Protects: nsga_* */
   /* Promise: to be only acquired from within a read lock on the Base. */

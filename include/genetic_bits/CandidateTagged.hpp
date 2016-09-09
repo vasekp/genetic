@@ -80,14 +80,15 @@ class CTIterator: public It {
 
 public:
 
-  typedef typename std::conditional<move,
+  using Target = typename std::conditional<move,
     typename It::value_type::rv_reference,
-    typename It::value_type::reference>::type Target;
-  typedef typename It::iterator_category iterator_category;
-  typedef typename It::difference_type difference_type;
-  typedef Target value_type;
-  typedef Target reference;
-  typedef typename std::add_pointer<Target>::type pointer;
+    typename It::value_type::reference>::type;
+
+  using iterator_category = typename It::iterator_category;
+  using difference_type   = typename It::difference_type;
+  using value_type        = Target;
+  using reference         = Target;
+  using pointer           = typename std::add_pointer<Target>::type;
 
   CTIterator(It it): It(it) { };
   reference operator*() const { return static_cast<Target>(It::operator*()); }

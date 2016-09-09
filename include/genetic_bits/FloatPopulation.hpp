@@ -6,7 +6,7 @@ namespace gen {
 template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
 class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
 
-  typedef OrdPopulation<CBase, is_ref, Tag, Population> Base;
+  using Base = OrdPopulation<CBase, is_ref, Tag, Population>;
 
   /* Protects: fitnessSelect_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
