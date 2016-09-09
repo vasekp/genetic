@@ -11,6 +11,10 @@ class OrdPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
 
   size_t last_sort_mod{(size_t)(~0)};
 
+  /* Protects: last_sort_mod, _rankSelect_* */
+  /* Promise: to be only acquired from within a read lock on the Base. */
+  mutable internal::rw_semaphore sort_smp{};
+
 public:
 
   using Base::Base;
@@ -30,6 +34,11 @@ public:
   /** \copydoc BasePopulation::reserve */
   void reserve(size_t count) {
     Base::reserve(count);
+    /* The above command raised smp.mod_cnt by at least 1 but did not disturb
+     * sorting. If our population was sorted we reflect that by manually
+     * incrementing last_sort_mod. If we weren't level before, or if it rose by
+     * more than 1, we won't have is_sorted() afterwards, as intended. */
+    internal::write_lock sort_lock(sort_smp);
     ++last_sort_mod;
   }
 
@@ -55,7 +64,7 @@ public:
     internal::read_lock lock(smp);
     if(this->empty())
       throw std::out_of_range("best(): BasePopulation is empty.");
-    if(is_sorted())
+    if(is_sorted(lock))
       return Base2::front();
     else
       return *std::min_element(begin(), end());
@@ -171,8 +180,9 @@ private:
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("rankSelect(): BasePopulation is empty.");
+    internal::read_lock sort_lock(sort_smp);
     if(sz != _rankSelect_last_sz || bias != _rankSelect_last_bias) {
-      lock.upgrade();
+      sort_lock.upgrade();
       _rankSelect_probs.clear();
       _rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
@@ -194,34 +204,37 @@ public:
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
     internal::read_lock lock(smp);
-    bool was_sorted = is_sorted();
+    bool was_sorted = is_sorted(lock);
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     ensure_sorted(lock);
     auto& dummy = Base2::front();  // needed by resize() if size() < newSize which can't happen
     Base2::resize(newSize, dummy); // (otherwise we would need a default constructor)
     if(was_sorted)
-      set_sorted();
+      set_sorted(lock);
   }
 
 private:
 
-  bool is_sorted() const {
+  bool is_sorted(const internal::rw_lock&) const {
+    internal::read_lock sort_lock(sort_smp);
     return smp.get_mod_cnt() == last_sort_mod;
   }
 
-  void set_sorted() {
+  void set_sorted(const internal::rw_lock&) {
+    internal::write_lock sort_lock(sort_smp);
     last_sort_mod = smp.get_mod_cnt();
   }
 
   void ensure_sorted(internal::rw_lock& lock) {
-    if(!is_sorted()) {
+    if(!is_sorted(lock)) {
       internal::upgrade_lock up(lock);
+      // No one else can be reading or modifying this now (promise)
       ++last_sort_mod;
-      if(is_sorted())
+      if(is_sorted(lock))
         return;
       std::sort(Base2::begin(), Base2::end());
-      set_sorted();
+      set_sorted(lock);
     }
   }
 

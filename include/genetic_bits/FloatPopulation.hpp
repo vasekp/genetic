@@ -8,6 +8,10 @@ class FloatPopulation : public OrdPopulation<CBase, is_ref, Tag, Population> {
 
   typedef OrdPopulation<CBase, is_ref, Tag, Population> Base;
 
+  /* Protects: _fitness* */
+  /* Promise: to be only acquired from within a read lock on the Base. */
+  mutable internal::rw_semaphore fit_smp{};
+
 public:
 
   using Base::Base;
@@ -99,8 +103,9 @@ private:
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): BasePopulation is empty.");
+    internal::read_lock fit_lock(fit_smp);
     if(_fitnessSelect_last_mod != smp.get_mod_cnt() || bias != _fitnessSelect_last_bias) {
-      lock.upgrade();
+      fit_lock.upgrade();
       _fitnessSelect_probs.clear();
       _fitnessSelect_probs.reserve(sz);
       for(auto& c : *this)

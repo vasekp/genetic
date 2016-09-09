@@ -14,6 +14,10 @@ class NSGAPopulation : public DomPopulation<CBase, is_ref, size_t, NSGAPopulatio
   typedef DomPopulation<CBase, is_ref, size_t, NSGAPopulation> Base;
   typedef internal::PBase<CBase, is_ref, size_t> Base2;
 
+  /* Protects: _nsgaSelect* */
+  /* Promise: to be only acquired from within a read lock on the Base. */
+  mutable internal::rw_semaphore nsga_smp{};
+
 public:
 
   using Base::Base;
@@ -35,6 +39,7 @@ public:
 #endif
     {
       internal::read_lock lock(smp);
+      internal::read_lock nsga_lock(nsga_smp);
       if(smp.get_mod_cnt() == _nsgaSelect_last_mod) {
         Ret ret{};
         for(auto& tg : (Base2&)(*this))
@@ -123,8 +128,7 @@ private:
     std::deque<_nsga_struct*> q;  // candidates dominated by this
   };
 
-  void NOINLINE _nsga_rate(internal::rw_lock& lock, bool parallel = false) {
-    internal::upgrade_lock up(lock);
+  void NOINLINE _nsga_rate(bool parallel = false) {
     std::list<_nsga_struct> ref{};
     for(auto& tg : static_cast<Base2&>(*this))
       ref.push_back(_nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
@@ -181,10 +185,11 @@ private:
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("NSGASelect(): BasePopulation is empty.");
+    internal::read_lock nsga_lock(nsga_smp);
     if(smp.get_mod_cnt() != _nsgaSelect_last_mod || bias != _nsgaSelect_last_bias) {
-      lock.upgrade();
-      if(smp.get_mod_cnt() != _nsgaSelect_last_mod + 1)
-        _nsga_rate(lock);
+      nsga_lock.upgrade();
+      if(smp.get_mod_cnt() != _nsgaSelect_last_mod)
+        _nsga_rate(false);
       _nsgaSelect_probs.clear();
       _nsgaSelect_probs.reserve(sz);
       for(auto& tg : static_cast<Base2&>(*this))
@@ -211,9 +216,13 @@ public:
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
   void precompute(bool parallel = true) {
-    internal::write_lock lock(smp);
-    _nsga_rate(lock, parallel);
-    _nsgaSelect_last_mod = smp.get_mod_cnt();
+    internal::read_lock lock(smp);
+    internal::read_lock nsga_lock(nsga_smp);
+    if(smp.get_mod_cnt() != _nsgaSelect_last_mod) {
+      nsga_lock.upgrade();
+      _nsga_rate(parallel);
+      _nsgaSelect_last_mod = smp.get_mod_cnt();
+    }
   }
 
 }; // class NSGAPopulation
