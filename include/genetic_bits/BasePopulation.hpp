@@ -87,9 +87,9 @@ public:
    * implicitly in any other *Population so let's not draw extra attention to
    * these in particular. */
 
-  BasePopulation(const BasePopulation& _p): Base(_p) { }
+  BasePopulation(const BasePopulation& p_): Base(p_) { }
 
-  BasePopulation(BasePopulation&& _p) noexcept: Base(std::move(_p)) { }
+  BasePopulation(BasePopulation&& p_) noexcept: Base(std::move(p_)) { }
 #endif
 
   /** \brief Creates an empty population but preallocates space for `count`
@@ -134,29 +134,29 @@ public:
   /** \brief Initializes this population from a compatible population.
    * \copydetails add(const Container&) */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  BasePopulation(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
-    add(_p);
+  BasePopulation(const BasePopulation<CBase, ref_, Tag_, Pop_>& p_) {
+    add(p_);
   }
 
   /** \brief Initializes this population from a compatible population
    * using move semantics, leaving the original container empty. */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  BasePopulation(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
-    add(std::move(_p));
+  BasePopulation(BasePopulation<CBase, ref_, Tag_, Pop_>&& p_) {
+    add(std::move(p_));
   }
 
 #ifndef DOXYGEN
   /* Copy and move assignment operators. Ditto as c&m constructors. */
 
-  BasePopulation& operator=(const BasePopulation& _p) {
+  BasePopulation& operator=(const BasePopulation& p_) {
     internal::write_lock lock(smp);
-    Base::operator=(_p);
+    Base::operator=(p_);
     return *this;
   }
 
-  BasePopulation& operator=(BasePopulation&& _p) noexcept {
+  BasePopulation& operator=(BasePopulation&& p_) noexcept {
     internal::write_lock lock(smp);
-    Base::operator=(std::move(_p));
+    Base::operator=(std::move(p_));
     return *this;
   }
 #endif
@@ -164,19 +164,19 @@ public:
   /** \brief Copy assignment of a compatible population.
    * \copydetails add(const Container&) */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  BasePopulation& operator=(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
+  BasePopulation& operator=(const BasePopulation<CBase, ref_, Tag_, Pop_>& p_) {
     internal::write_lock lock(smp);
     Base::clear();
-    Base::insert(Base::end(), _p.begin(), _p.end());
+    Base::insert(Base::end(), p_.begin(), p_.end());
     return *this;
   }
 
   /** \brief Move assignment of a compatible population. */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
-  BasePopulation& operator=(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
+  BasePopulation& operator=(BasePopulation<CBase, ref_, Tag_, Pop_>&& p_) {
     internal::write_lock lock(smp);
     Base::clear();
-    move_add_unguarded(_p);
+    move_add_unguarded(p_);
     return *this;
   }
 

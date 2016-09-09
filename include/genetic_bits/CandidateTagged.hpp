@@ -14,7 +14,7 @@ struct TagWrap {
 
   TagWrap(): t() { }
 
-  TagWrap(Tag& _t): t(_t) { }
+  TagWrap(Tag& t_): t(t_) { }
 
   operator Tag&() { return t; }
 
@@ -52,9 +52,9 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
   using reference = const gen::Candidate<CBase>&;
   using rv_reference = CTBase<CBase, ref>&&;
 
-  CandidateTagged(const gen::Candidate<CBase>& _c): CTBase<CBase, ref>(_c) { }
+  CandidateTagged(const gen::Candidate<CBase>& c_): CTBase<CBase, ref>(c_) { }
 
-  CandidateTagged(CTBase<CBase, ref>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
+  CandidateTagged(CTBase<CBase, ref>&& c_): CTBase<CBase, ref>(std::move(c_)) { }
 
   Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
 

@@ -131,26 +131,26 @@ public:
 
 private:
 
-  struct _nsga_struct {
+  struct nsga_struct {
     const Candidate<CBase>& r; // reference to a candidate
     size_t& rank;       // reference to its tag in the original population
     size_t dom_cnt;     // number of candidates dominating this
-    std::deque<_nsga_struct*> q;  // candidates dominated by this
+    std::deque<nsga_struct*> q;  // candidates dominated by this
   };
 
   void NOINLINE nsga_rate(bool parallel = false) {
-    std::list<_nsga_struct> ref{};
+    std::list<nsga_struct> ref{};
     for(auto& tg : static_cast<Base2&>(*this))
-      ref.push_back(_nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
+      ref.push_back(nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
     #pragma omp parallel if(parallel)
     {
       #pragma omp single
       for(auto& r : ref) {
-        _nsga_struct* rr = &r;
-        #pragma omp task firstprivate(rr)
+        nsga_struct* pr = &r;
+        #pragma omp task firstprivate(pr)
         for(auto& s : ref)
-          if(rr->r << s.r) {
-            rr->q.push_back(&s);
+          if(pr->r << s.r) {
+            pr->q.push_back(&s);
             #pragma omp atomic
             s.dom_cnt++;
           }
@@ -160,7 +160,7 @@ private:
     /* ref contains the candidates with yet unassigned rank. When this becomes
      * empty, we're done. */
     while(ref.size() > 0) {
-      std::vector<_nsga_struct> cur_front{};
+      std::vector<nsga_struct> cur_front{};
       {
         auto it = ref.begin();
         auto end = ref.end();

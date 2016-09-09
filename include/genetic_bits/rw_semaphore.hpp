@@ -63,7 +63,7 @@ namespace internal {
 
   protected:
 
-    rw_lock(rw_semaphore& _s, bool _w): s(_s), write(_w) {
+    rw_lock(rw_semaphore& s_, bool w_): s(s_), write(w_) {
       if(write) {
         // Logic: write creates a persistent lock, preventing other writes from
         // starting. They can still execute ++s.w to let themselves known but
@@ -200,7 +200,7 @@ namespace internal {
 
   public:
 
-    upgrade_lock(rw_lock& _l): l(_l) {
+    upgrade_lock(rw_lock& l_): l(l_) {
       u = l.upgrade();
     }
 
