@@ -4,12 +4,16 @@ namespace gen {
  * selection methods.
  *
  * \tparam CBase the base class of the member candidates of this population.
- * Must implement a partial (dominance) order given by a <b>bool operator<<()</b>.
- * See Candidate for further details.
+ * Must implement a partial (dominance) order given by a <b>bool
+ * %operator<<()</b>, otherwise a compile-time error is generated.  See
+ * Candidate for further details.
  * \tparam is_ref if set to \b true, this is a reference population. See \link
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
 class NSGAPopulation : public DomPopulation<CBase, is_ref, size_t, NSGAPopulation> {
+
+  static_assert(Candidate<CBase>::Traits::is_dominable,
+      "The fitness type of CBase needs to support bool operator<<()!");
 
   typedef DomPopulation<CBase, is_ref, size_t, NSGAPopulation> Base;
   typedef internal::PBase<CBase, is_ref, size_t> Base2;
