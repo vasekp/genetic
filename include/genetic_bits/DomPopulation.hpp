@@ -45,10 +45,10 @@ public:
 
   /** \brief Returns a nondominated subset of this population.
    *
-   * The returned Ref remains valid until the original population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use front_v() instead.
+   * The returned \link Ref \endlink remains valid until the original
+   * population is modified.  Therefore there is a risk of invalidating it in
+   * a multi-threaded program if another thread concurrently modifies the
+   * population. If your code allows this, use front_v() instead.
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
 #ifdef DOXYGEN
@@ -76,7 +76,7 @@ public:
 
   /** \copybrief front()
    *
-   * Works like front() but returns an independent DomPopulation. */
+   * Works like front() but returns an independent population. */
   typename Base::Val NOINLINE front_v(bool parallel = true) const {
     return front<typename Base::Val>(parallel);
   }

@@ -23,9 +23,9 @@ using PopulationChooser = typename std::conditional<
 } // namespace internal
 
 
-/** \brief The main Population template, representing a collection of \link
- * Candidate Candidates \endlink. This is the entry point of most applications
- * of the framework.
+/** \brief The main Population template, representing a collection of
+ * <b>Candidate</b>s. This is the entry point of most applications of the
+ * framework.
  *
  * Depending on the properties of the candidate base class \b CBase,
  * \link gen::Population Population<CBase> \endlink becomes a synonyme for:
@@ -35,13 +35,12 @@ using PopulationChooser = typename std::conditional<
  * - BasePopulation in all other cases (this is the subclass of the above
  *   three).
  *
- * A Population can be used as a container of \link Candidate Candidates
- * \endlink with read-only access. (See Candidate for discussion about the
- * relation between a Candidate and \b CBase.) The functions \link
- * BasePopulation::begin() begin() \endlink and \link BasePopulation::end()
- * end() \endlink are exposed, returning random access iterators dereferencing
- * to <b>const \link Candidate Candidate<CBase> \endlink&</b> and allowing the
- * iteration patterns
+ * A Population can be used as a container of <b>Candidate</b>s with read-only
+ * access. (See Candidate for discussion about the relation between a
+ * Candidate and \b CBase.) The functions \link BasePopulation::begin()
+ * begin() \endlink and \link BasePopulation::end() end() \endlink are
+ * exposed, returning random access iterators dereferencing to <b>const \link
+ * Candidate Candidate<CBase>\endlink&</b> and allowing the iteration patterns
  * ```
  * for(auto& c : pop) { ... }
  * ```

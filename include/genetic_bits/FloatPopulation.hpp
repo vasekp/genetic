@@ -42,18 +42,14 @@ public:
    * if another thread concurrently modifies the population. If your code
    * allows this, use fitnessSelect_v() instead.
    *
-   * Applicable only if the type returned by `CBase::fitness()` can be
-   * converted to `double`. This method generates a compile-time error in
-   * specializations for which this condition is not satisfied.
-   *
-   * \tparam fun A `constexpr` pointer to a function of signature
-   * either `double(*)(double)` or `double(*)(double, double)`. In the former
-   * case, the argument is `x * bias`, in the latter case the arguments
-   * are `x` and `bias`, where `x` denotes the fitness of each candidate.
-   * It must be positive and strictly increasing in `x` for `bias > 0`.
-   * This function will be built in at compile time, eliminating a function
-   * pointer lookup. The default is `std::exp`, another usual choice is
-   * `std::pow`.
+   * \tparam fun A \b constexpr pointer to a function of signature either
+   * <b>double(*)(double)</b> or <b>double(*)(double, double)</b>. In the
+   * former case, the argument is <b>x * bias</b>, in the latter case the
+   * arguments are \b x and \b bias, where \b x denotes the fitness of each
+   * candidate.  It must be positive and strictly increasing in \b x for
+   * <b>bias > 0</b>.  This function will be built in at compile time,
+   * eliminating a function pointer lookup. The default is \b std::exp,
+   * another usual choice is \b std::pow.
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
@@ -103,7 +99,7 @@ private:
     internal::read_lock lock(smp);
     size_t sz = size();
     if(sz == 0)
-      throw std::out_of_range("fitnessSelect(): BasePopulation is empty.");
+      throw std::out_of_range("fitnessSelect(): Population is empty.");
     internal::read_lock fit_lock(fit_smp);
     if(fitnessSelect_last_mod != smp.get_mod_cnt() || bias != fitnessSelect_last_bias) {
       fit_lock.upgrade();
@@ -122,22 +118,17 @@ public:
 
   /** \brief The return type of FloatPopulation::stat(). */
   struct Stat {
-    double mean;  ///< The mean fitness of the BasePopulation.
-    double stdev; ///< The standard deviation of fitness in the BasePopulation.
+    double mean;  ///< The mean fitness of the population.
+    double stdev; ///< The standard deviation of fitness in the population.
   };
 
   /** \brief Returns the mean fitness of the population and the standard
    * deviation.
    *
-   * Applicable only to candidate classes whose fitness is a simple floating
-   * point type or allows an implicit convertion to one. This method
-   * generates a compile-time error in specializations for which this
-   * condition is not satisfied.
-   *
    * \see Stat */
   Stat stat() const {
     if(this->empty())
-      throw std::out_of_range("stat(): BasePopulation is empty.");
+      throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock(smp);
     for(auto& c : *this) {
