@@ -14,9 +14,14 @@ class NSGAPopulation : public DomPopulation<CBase, is_ref, size_t, NSGAPopulatio
   typedef DomPopulation<CBase, is_ref, size_t, NSGAPopulation> Base;
   typedef internal::PBase<CBase, is_ref, size_t> Base2;
 
-  /* Protects: _nsgaSelect* */
+  /* Protects: nsga_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
   mutable internal::rw_semaphore nsga_smp{};
+
+  std::discrete_distribution<size_t> nsga_dist{};
+  std::vector<double> nsga_probs{};
+  size_t nsga_last_mod{(size_t)(~0)};
+  double nsga_last_bias{};
 
 public:
 
@@ -40,7 +45,7 @@ public:
     {
       internal::read_lock lock(smp);
       internal::read_lock nsga_lock(nsga_smp);
-      if(smp.get_mod_cnt() == _nsgaSelect_last_mod) {
+      if(smp.get_mod_cnt() == nsga_last_mod) {
         Ret ret{};
         for(auto& tg : (Base2&)(*this))
           if(tg.tag() == 0)
@@ -121,6 +126,7 @@ public:
 #endif
 
 private:
+
   struct _nsga_struct {
     const Candidate<CBase>& r; // reference to a candidate
     size_t& rank;       // reference to its tag in the original population
@@ -128,7 +134,7 @@ private:
     std::deque<_nsga_struct*> q;  // candidates dominated by this
   };
 
-  void NOINLINE _nsga_rate(bool parallel = false) {
+  void NOINLINE nsga_rate(bool parallel = false) {
     std::list<_nsga_struct> ref{};
     for(auto& tg : static_cast<Base2&>(*this))
       ref.push_back(_nsga_struct{static_cast<const Candidate<CBase>&>(tg), tg.tag(), 0, {}});
@@ -174,11 +180,6 @@ private:
     }
   }
 
-  std::discrete_distribution<size_t> _nsgaSelect_dist{};
-  std::vector<double> _nsgaSelect_probs{};
-  size_t _nsgaSelect_last_mod{(size_t)(~0)};
-  double _nsgaSelect_last_bias{};
-
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE NSGASelect_int(double bias, Rng& rng) {
     internal::read_lock lock(smp);
@@ -186,19 +187,19 @@ private:
     if(sz == 0)
       throw std::out_of_range("NSGASelect(): BasePopulation is empty.");
     internal::read_lock nsga_lock(nsga_smp);
-    if(smp.get_mod_cnt() != _nsgaSelect_last_mod || bias != _nsgaSelect_last_bias) {
+    if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
       nsga_lock.upgrade();
-      if(smp.get_mod_cnt() != _nsgaSelect_last_mod)
-        _nsga_rate(false);
-      _nsgaSelect_probs.clear();
-      _nsgaSelect_probs.reserve(sz);
+      if(smp.get_mod_cnt() != nsga_last_mod)
+        nsga_rate(false);
+      nsga_probs.clear();
+      nsga_probs.reserve(sz);
       for(auto& tg : static_cast<Base2&>(*this))
-        _nsgaSelect_probs.push_back(1 / fun(tg.tag(), bias));
-      _nsgaSelect_dist = std::discrete_distribution<size_t>(_nsgaSelect_probs.begin(), _nsgaSelect_probs.end());
-      _nsgaSelect_last_mod = smp.get_mod_cnt();
-      _nsgaSelect_last_bias = bias;
+        nsga_probs.push_back(1 / fun(tg.tag(), bias));
+      nsga_dist = std::discrete_distribution<size_t>(nsga_probs.begin(), nsga_probs.end());
+      nsga_last_mod = smp.get_mod_cnt();
+      nsga_last_bias = bias;
     }
-    size_t ix = _nsgaSelect_dist(rng);
+    size_t ix = nsga_dist(rng);
     return operator[](ix);
   }
 
@@ -218,10 +219,10 @@ public:
   void precompute(bool parallel = true) {
     internal::read_lock lock(smp);
     internal::read_lock nsga_lock(nsga_smp);
-    if(smp.get_mod_cnt() != _nsgaSelect_last_mod) {
+    if(smp.get_mod_cnt() != nsga_last_mod) {
       nsga_lock.upgrade();
-      _nsga_rate(parallel);
-      _nsgaSelect_last_mod = smp.get_mod_cnt();
+      nsga_rate(parallel);
+      nsga_last_mod = smp.get_mod_cnt();
     }
   }
 

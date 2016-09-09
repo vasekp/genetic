@@ -9,11 +9,16 @@ class OrdPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
   typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
   typedef internal::PBase<CBase, is_ref, Tag> Base2;
 
-  size_t last_sort_mod{(size_t)(~0)};
-
-  /* Protects: last_sort_mod, _rankSelect_* */
+  /* Protects: last_sort_mod, rankSelect_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
   mutable internal::rw_semaphore sort_smp{};
+
+  size_t last_sort_mod{(size_t)(~0)};
+  std::uniform_real_distribution<double> uniform{0, 1};
+  std::discrete_distribution<size_t> rankSelect_dist{};
+  std::vector<double> rankSelect_probs{};
+  size_t rankSelect_last_sz{};
+  double rankSelect_last_bias{};
 
 public:
 
@@ -153,12 +158,11 @@ public:
 #endif
 
 private:
-  std::uniform_real_distribution<double> _uniform{0, 1};
 
   template<class Ret, class Rng>
   Ret NOINLINE rankSelect_exp(double bias, Rng& rng) {
     internal::read_lock lock(smp);
-    double x = _uniform(rng);
+    double x = uniform(rng);
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("rankSelect(): BasePopulation is empty.");
@@ -169,11 +173,6 @@ private:
       return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
-  std::discrete_distribution<size_t> _rankSelect_dist{};
-  std::vector<double> _rankSelect_probs{};
-  size_t _rankSelect_last_sz{};
-  double _rankSelect_last_bias{};
-
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE rankSelect_two(double bias, Rng& rng) {
     internal::read_lock lock(smp);
@@ -181,18 +180,18 @@ private:
     if(sz == 0)
       throw std::out_of_range("rankSelect(): BasePopulation is empty.");
     internal::read_lock sort_lock(sort_smp);
-    if(sz != _rankSelect_last_sz || bias != _rankSelect_last_bias) {
+    if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
       sort_lock.upgrade();
-      _rankSelect_probs.clear();
-      _rankSelect_probs.reserve(sz);
+      rankSelect_probs.clear();
+      rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
-        _rankSelect_probs.push_back(1 / fun((double)(i+1) / sz, bias));
-      _rankSelect_dist = std::discrete_distribution<size_t>(_rankSelect_probs.begin(), _rankSelect_probs.end());
-      _rankSelect_last_sz = sz;
-      _rankSelect_last_bias = bias;
+        rankSelect_probs.push_back(1 / fun((double)(i+1) / sz, bias));
+      rankSelect_dist = std::discrete_distribution<size_t>(rankSelect_probs.begin(), rankSelect_probs.end());
+      rankSelect_last_sz = sz;
+      rankSelect_last_bias = bias;
     }
     ensure_sorted(lock);
-    return operator[](_rankSelect_dist(rng));
+    return operator[](rankSelect_dist(rng));
   }
 
 public:

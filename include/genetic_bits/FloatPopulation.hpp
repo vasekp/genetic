@@ -8,9 +8,14 @@ class FloatPopulation : public OrdPopulation<CBase, is_ref, Tag, Population> {
 
   typedef OrdPopulation<CBase, is_ref, Tag, Population> Base;
 
-  /* Protects: _fitness* */
+  /* Protects: fitnessSelect_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
   mutable internal::rw_semaphore fit_smp{};
+
+  std::discrete_distribution<size_t> fitnessSelect_dist{};
+  std::vector<double> fitnessSelect_probs{};
+  size_t fitnessSelect_last_mod{(size_t)(~0)};
+  double fitnessSelect_last_bias{};
 
 public:
 
@@ -92,10 +97,6 @@ public:
 #endif
 
 private:
-  std::discrete_distribution<size_t> _fitnessSelect_dist{};
-  std::vector<double> _fitnessSelect_probs{};
-  size_t _fitnessSelect_last_mod{(size_t)(~0)};
-  double _fitnessSelect_last_bias{};
 
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE fitnessSelect_int(double bias, Rng& rng) {
@@ -104,17 +105,17 @@ private:
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): BasePopulation is empty.");
     internal::read_lock fit_lock(fit_smp);
-    if(_fitnessSelect_last_mod != smp.get_mod_cnt() || bias != _fitnessSelect_last_bias) {
+    if(fitnessSelect_last_mod != smp.get_mod_cnt() || bias != fitnessSelect_last_bias) {
       fit_lock.upgrade();
-      _fitnessSelect_probs.clear();
-      _fitnessSelect_probs.reserve(sz);
+      fitnessSelect_probs.clear();
+      fitnessSelect_probs.reserve(sz);
       for(auto& c : *this)
-        _fitnessSelect_probs.push_back(1 / fun(c.fitness(), bias));
-      _fitnessSelect_dist = std::discrete_distribution<size_t>(_fitnessSelect_probs.begin(), _fitnessSelect_probs.end());
-      _fitnessSelect_last_mod = smp.get_mod_cnt();
-      _fitnessSelect_last_bias = bias;
+        fitnessSelect_probs.push_back(1 / fun(c.fitness(), bias));
+      fitnessSelect_dist = std::discrete_distribution<size_t>(fitnessSelect_probs.begin(), fitnessSelect_probs.end());
+      fitnessSelect_last_mod = smp.get_mod_cnt();
+      fitnessSelect_last_bias = bias;
     }
-    return operator[](_fitnessSelect_dist(rng));
+    return operator[](fitnessSelect_dist(rng));
   }
 
 public:
