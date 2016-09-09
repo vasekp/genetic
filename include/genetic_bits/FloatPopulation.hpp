@@ -1,9 +1,9 @@
 namespace gen {
 
-template<class CBase, class Tag = internal::empty, bool is_ref = false>
-class FloatPopulation : public OrdPopulation<CBase, Tag, is_ref> {
+template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+class FloatPopulation : public OrdPopulation<CBase, is_ref, Tag, Population> {
 
-  typedef OrdPopulation<CBase, Tag, is_ref> Base;
+  typedef OrdPopulation<CBase, is_ref, Tag, Population> Base;
 
 public:
 
@@ -13,8 +13,6 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
-
-  typedef FloatPopulation<CBase, Tag, true> Ref;
 
   /** \brief Creates an empty population. */
   FloatPopulation() = default;

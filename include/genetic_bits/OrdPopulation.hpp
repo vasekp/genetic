@@ -1,10 +1,10 @@
 namespace gen {
 
-template<class CBase, class Tag = internal::empty, bool is_ref = false>
-class OrdPopulation : public BasePopulation<CBase, Tag, is_ref> {
+template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+class OrdPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
 
-  typedef BasePopulation<CBase, Tag, is_ref> Base;
-  typedef internal::PBase<CBase, Tag, is_ref> Base2;
+  typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
+  typedef internal::PBase<CBase, is_ref, Tag> Base2;
 
   size_t last_sort_mod{(size_t)(~0)};
 
@@ -17,10 +17,8 @@ public:
   using Base::size;
   using Base::operator[];
 
-  typedef OrdPopulation<CBase, Tag, true> Ref;
-
   /* Befriend all compatible OrdPopulations */
-  template<class, class, bool>
+  template<class, bool, class, template<class, bool> class>
   friend class OrdPopulation;
 
   /** \brief Creates an empty population. */
@@ -41,8 +39,8 @@ public:
   /* TODO locks */
   /** \brief Copy assignment of a compatible OrdPopulation.
    * \copydetails add(const Container&) */
-  template<class Tag_, bool ref_>
-  OrdPopulation& operator=(const OrdPopulation<CBase, Tag_, ref_>& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  OrdPopulation& operator=(const OrdPopulation<CBase, ref_, Tag_, Pop_>& _p) {
     Base::operator=(std::move(_p));
     if(_p.is_sorted_g())
       set_sorted_g();
@@ -50,8 +48,8 @@ public:
   }
 
   /** \brief Move assignment of a compatible OrdPopulation. */
-  template<class Tag_, bool ref_>
-  OrdPopulation& operator=(OrdPopulation<CBase, Tag_, ref_>&& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  OrdPopulation& operator=(OrdPopulation<CBase, ref_, Tag_, Pop_>&& _p) {
     Base::operator=(std::move(_p));
     if(_p.is_sorted_g())
       set_sorted_g();

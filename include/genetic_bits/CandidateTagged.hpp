@@ -38,7 +38,7 @@ using CTBase = typename std::conditional<ref,
  * reference to a Candidate and an (independent) Tag. The user should never
  * encounter this mechanism directly as it transparently casts to a const
  * Candidate&. */
-template<class CBase, typename Tag, bool ref>
+template<class CBase, bool ref, typename Tag>
 struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   using reference = const gen::Candidate<CBase>&;

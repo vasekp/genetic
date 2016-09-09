@@ -1,19 +1,22 @@
 namespace gen {
 
+template<class CBase, bool is_ref = false>
+  class Population;
+
 namespace internal {
 
-template<class CBase, class Tag = internal::empty, bool is_ref = false>
+template<class CBase, bool is_ref = false>
 using PopulationChooser = typename std::conditional<
   Candidate<CBase>::Traits::is_comparable,
   typename std::conditional<
     Candidate<CBase>::Traits::is_float,
-    FloatPopulation<CBase, Tag, is_ref>,
-    OrdPopulation<CBase, Tag, is_ref>
+    FloatPopulation<CBase, is_ref, internal::empty, gen::Population>,
+    OrdPopulation<CBase, is_ref, internal::empty, gen::Population>
   >::type,
   typename std::conditional<
     Candidate<CBase>::Traits::is_dominable,
-    DomPopulation<CBase, Tag, is_ref>,
-    BasePopulation<CBase, Tag, is_ref>
+    DomPopulation<CBase, is_ref, internal::empty, gen::Population>,
+    BasePopulation<CBase, is_ref, internal::empty, gen::Population>
   >::type
 >::type;
 
@@ -33,7 +36,15 @@ using PopulationChooser = typename std::conditional<
  *   three).
  *
  * See the documentation of the above classes for more detailed description. */
-template<class CBase, class Tag = internal::empty, bool is_ref = false>
-using Population = typename internal::PopulationChooser<CBase, Tag, is_ref>;
+template<class CBase, bool is_ref>
+class Population : public internal::PopulationChooser<CBase, is_ref> {
+
+  typedef internal::PopulationChooser<CBase, is_ref> Base;
+
+  public:
+
+  using Base::Base;
+
+};
 
 } // namespace gen

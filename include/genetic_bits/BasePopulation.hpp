@@ -2,8 +2,8 @@ namespace gen {
 
 namespace internal {
 
-template<class CBase, class Tag, bool is_ref>
-using PBase = std::vector<internal::CandidateTagged<CBase, Tag, is_ref>>;
+template<class CBase, bool is_ref, class Tag>
+using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 
 } // namespace internal
 
@@ -39,10 +39,10 @@ using PBase = std::vector<internal::CandidateTagged<CBase, Tag, is_ref>>;
  * When supplied, must represent a default-constructible type.
  * \tparam is_ref if set to `true`, this is a reference population. See
  * BasePopulation::Ref for more details. */
-template<class CBase, class Tag = internal::empty, bool is_ref = false>
-class BasePopulation : protected internal::PBase<CBase, Tag, is_ref> {
+template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+class BasePopulation : protected internal::PBase<CBase, is_ref, Tag> {
 
-  typedef internal::PBase<CBase, Tag, is_ref> Base;
+  typedef internal::PBase<CBase, is_ref, Tag> Base;
 
   typedef internal::CTIterator<typename Base::iterator> iterator;
   typedef internal::CTIterator<typename Base::const_iterator> const_iterator;
@@ -79,7 +79,8 @@ public:
    * elements.  This includes rankSelect(), which needs to sort the contents
    * for its operation, and reserve(), which may move the contents to a new
    * memory location. */
-  typedef BasePopulation<CBase, Tag, true> Ref;
+  typedef Population<CBase, true> Ref;
+  typedef Population<CBase, false> Val;
 
   /** \brief Creates an empty population. */
   BasePopulation() = default;
@@ -134,15 +135,15 @@ public:
 
   /** \brief Initializes this population from a compatible BasePopulation.
    * \copydetails add(const Container&) */
-  template<class Tag_, bool ref_>
-  BasePopulation(const BasePopulation<CBase, Tag_, ref_>& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  BasePopulation(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
     add(_p);
   }
 
   /** \brief Initializes this population from a compatible BasePopulation
    * using move semantics, leaving the original container empty. */
-  template<class Tag_, bool ref_>
-  BasePopulation(BasePopulation<CBase, Tag_, ref_>&& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  BasePopulation(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
     add(std::move(_p));
   }
 
@@ -162,8 +163,8 @@ public:
 
   /** \brief Copy assignment of a compatible BasePopulation.
    * \copydetails add(const Container&) */
-  template<class Tag_, bool ref_>
-  BasePopulation& operator=(const BasePopulation<CBase, Tag_, ref_>& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  BasePopulation& operator=(const BasePopulation<CBase, ref_, Tag_, Pop_>& _p) {
     internal::write_lock lock(smp);
     Base::clear();
     Base::insert(Base::end(), _p.begin(), _p.end());
@@ -171,8 +172,8 @@ public:
   }
 
   /** \brief Move assignment of a compatible BasePopulation. */
-  template<class Tag_, bool ref_>
-  BasePopulation& operator=(BasePopulation<CBase, Tag_, ref_>&& _p) {
+  template<bool ref_, class Tag_, template<class, bool> class Pop_>
+  BasePopulation& operator=(BasePopulation<CBase, ref_, Tag_, Pop_>&& _p) {
     internal::write_lock lock(smp);
     Base::clear();
     move_add_unguarded(_p);
@@ -471,8 +472,8 @@ public:
    * Works like randomSelect(size_t, Rng&) const but returns an independent
    * BasePopulation. */
   template<class Rng = decltype(rng)>
-  BasePopulation NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
-    return randomSelect<BasePopulation>(k, rng);
+  Val NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
+    return randomSelect<Val>(k, rng);
   }
 
   template<class Rng = decltype(rng)>

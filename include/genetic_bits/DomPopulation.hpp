@@ -1,10 +1,10 @@
 namespace gen {
 
-template<class CBase, class Tag, bool is_ref = false>
-class DomPopulation : public BasePopulation<CBase, Tag, is_ref> {
+template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
+class DomPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
 
-  typedef BasePopulation<CBase, Tag, is_ref> Base;
-  typedef internal::PBase<CBase, Tag, is_ref> Base2;
+  typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
+  typedef internal::PBase<CBase, is_ref, Tag> Base2;
 
 public:
 
@@ -14,8 +14,6 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
-
-  typedef DomPopulation<CBase, Tag, true> Ref;
 
   /** \brief Creates an empty population. */
   DomPopulation() = default;
@@ -53,7 +51,7 @@ public:
 #ifdef DOXYGEN
   Ref front(bool parallel = true) const {
 #else
-  template<class Ret = Ref>
+  template<class Ret = typename Base::Ref>
   Ret NOINLINE front(bool parallel = true) const {
 #endif
     Ret ret{};
@@ -76,8 +74,8 @@ public:
   /** \copybrief front()
    *
    * Works like front() but returns an independent DomPopulation. */
-  DomPopulation NOINLINE front_v(bool parallel = true) const {
-    return front<DomPopulation>(parallel);
+  typename Base::Val NOINLINE front_v(bool parallel = true) const {
+    return front<typename Base::Val>(parallel);
   }
 
 }; // class DomPupolation
