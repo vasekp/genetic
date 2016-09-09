@@ -42,10 +42,10 @@ public:
    * This is the return type of functions that return a subset of an existing
    * population by reference as it holds its members by reference rather than
    * by value. Internally it is another Population specialization with a
-   * matching CBase type, so the same functions including adding or erasing
-   * can be called on it despite its temporary nature and assignments between
+   * matching \b CBase type, so the same functions including adding or erasing
+   * can be called on it despite its dependent nature and assignments between
    * Population and \b Population::Ref objects are allowed and behave as
-   * expected, see add(Container&).
+   * expected, see add(const Container&) and add(Container&&).
    *
    * It is guaranteed that \b Population::Ref::Ref is identical to
    * \b Population::Ref, which makes it convenient to chain selection functions,
@@ -58,10 +58,10 @@ public:
    * It is the user's responsibility not to use the references beyond their
    * scope. They are invalidated by operations which modify the original
    * population, namely all operations adding, removing, and reordering its
-   * elements.  This includes \link gen::OrdPopulation::rankSelect()
-   * rankSelect() \endlink, which needs to sort the contents for its
-   * operation, and reserve(), which may move the contents to a new memory
-   * location. */
+   * elements.  This includes functions like \link
+   * gen::OrdPopulation::rankSelect() rankSelect() \endlink, which needs to
+   * sort the contents for its operation, and reserve(), which may move the
+   * contents to a new memory location. */
   typedef Population<CBase, true> Ref;
 
   /** \brief A corresponding "value population", a helper type for functions
@@ -91,14 +91,14 @@ public:
   BasePopulation(BasePopulation&& _p) noexcept: Base(std::move(_p)) { }
 #endif
 
-  /** \brief Creates an empty population but preallocates space for `count`
+  /** \brief Creates an empty population but preallocates space for \b count
    * candidates. */
   explicit BasePopulation(size_t count) {
     Base::reserve(count);
   }
 
-  /** \brief Creates a population of size `count` whose candidates are results
-   * of calls to the source function `src`.
+  /** \brief Creates a population of size \b count whose candidates are results
+   * of calls to the source function \b src.
    * \copydetails add(size_t, Source, bool) */
   template<class Source>
   explicit BasePopulation(size_t count, Source src, bool parallel = true) {
@@ -106,22 +106,23 @@ public:
   }
 
   /** \brief Initializes this population from an iterator range from a
-   * container of `Candidate`s or `CBase`s. */
+   * container of <b>Candidate</b>s or <b>CBase</b>s. */
   template<class InputIt>
   explicit BasePopulation(InputIt first, InputIt last) {
     add(first, last);
   }
 
-  /** \brief Initializes this population from a container of `Candidate`s or
-   * `CBase`s (e.g., a `std::vector` or another BasePopulation).
+  /** \brief Initializes this population from a container of <b>Candidate</b>s
+   * or <b>CBase</b>s (e.g., a \b std::vector or another Population).
    * \copydetails add(const Container&) */
   template<class Container>
   explicit BasePopulation(const Container& vec) {
     add(vec);
   }
 
-  /** \brief Initializes this population from a container of `Candidate`s or
-   * `CBase`s using move semantics, leaving the original container empty. */
+  /** \brief Initializes this population from a container of <b>Candidate</b>s
+   * or <b>CBase</b>s using move semantics, leaving the original container
+   * empty. */
   template<class Container>
   explicit BasePopulation(Container&& vec) {
     add(std::forward<Container>(vec));
@@ -192,9 +193,9 @@ public:
     Base::clear();
   }
 
-  /** \brief Reserves space for `count` candidates.
+  /** \brief Reserves space for \b count candidates.
    *
-   * If `count` is larger than the actual size of the population, all
+   * If \b count is larger than the actual size of the population, all
    * references may be invalidated. */
   void reserve(size_t count) {
     internal::write_lock lock(smp);
@@ -206,7 +207,7 @@ public:
     return iterator(Base::begin());
   }
 
-  /** \brief Returns an iterator to the end. */
+  /** \brief Returns the past-the-end iterator. */
   iterator end() {
     return iterator(Base::end());
   }
@@ -216,7 +217,7 @@ public:
     return const_iterator(Base::begin());
   }
 
-  /** \brief Returns a constant iterator to the end. */
+  /** \brief Returns the constant past-the-end iterator. */
   const_iterator end() const {
     return const_iterator(Base::end());
   }
@@ -243,14 +244,14 @@ public:
     Base::push_back(std::move(c));
   }
 
-  /** \brief Draws `count` candidates from a source function `src`.
+  /** \brief Draws \b count candidates from a source function \b src.
    *
    * \param count the number of candidates to generate
    * \param src source function; can be any callable object (e.g., a
-   * `std::function`, a function pointer, or a lambda function) returning
-   * either of `Candidate<CBase>` or `CBase` and either by value or by
-   * reference (a copy will be taken). In many cases the function
-   * call can be inlined by the optimizer if known at compile time.
+   * \b std::function, a function pointer, or a lambda function) returning
+   * either of \link gen::Candidate Candidate<CBase> \endlink or \b CBase and
+   * either by value or by reference (a copy will be taken). In many cases the
+   * function call can be inlined by the optimizer if known at compile time.
    * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
   void NOINLINE add(size_t count, Source src, bool parallel = true) {
@@ -270,14 +271,14 @@ public:
     }
   }
 
-  /** \brief Copies an iterator range from a container of candidates. */
+  /** \brief Copies an iterator range from a container of <b>Candidate</b>s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
     internal::write_lock lock(smp);
     Base::insert(Base::end(), first, last);
   }
 
-  /** \brief Copies all candidates from a container of candidates.
+  /** \brief Copies all candidates from a container of <b>Candidate</b>s.
    *
    * If this population is a reference population, references to all members
    * of the argument are taken, copies are made otherwise. */
@@ -291,10 +292,11 @@ public:
     add(vec.begin(), vec.end());
   }
 
-  /** \brief Moves all candidates from a container of candidates.
+  /** \brief Moves all candidates from a container of <b>Candidate</b>s.
    *
    * Moves between populations are only supported if source and destination
-   * are both non-reference or both reference and are of the same `CBase` type. */
+   * are both non-reference or both reference and are of the same \b CBase
+   * type. */
   template<class Container>
 #ifdef DOXYGEN
   void
@@ -331,29 +333,36 @@ public:
     internal::read_lock lock(smp);
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
+    if(size() == 0)
+      return;
     shuffle(rng);
-    auto& dummy = Base::front(); // see rankTrim()
+    /* A reference is needed for resize() to fill up new space if newSize >
+     * size(). (There's an overload without this argument but that relies on a
+     * default constructor which we don't require). This is prevented by the
+     * lock so we can pass any reference at hand. Front is guaranteed to exist
+     * after excluding an empty population above. */
+    auto& dummy = Base::front();
     Base::resize(newSize, dummy);
   }
 
   /** \brief Reduces the population by selective removal of candidates.
    *
-   * Candidates are tested against a given predicate. If a candidate `c`
-   * satisfies `pred(c)` it is removed from the population. A minimum number
+   * Candidates are tested against a given predicate. If a candidate \b c
+   * satisfies \b pred(c) it is removed from the population. A minimum number
    * of candidates can be set; if so, the procedure stops when enough
    * candidates have been removed to satisfy this bound.
    *
-   * \param test a boolean function accepting a constant Candidate<CBase>
-   * reference. If the return value is `true` the candidate is removed from
-   * the population.
+   * \param test a boolean function accepting a constant \link gen::Candidate
+   * Candidate<CBase>\endlink reference. If the return value is \b true the
+   * candidate is removed from the population.
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all candidates satisfying the predicate are
    * removed.
    * \param randomize whether to randomly shuffle the sample prior to pruning
-   * (this is the default). If `false` then earlier appearing candidates are
+   * (this is the default). If \b false then earlier appearing candidates are
    * preferred in survival.
-   * \param rng the random number generator, or gen::rng by default. Ignored
-   * if `randomize` is `false`. */
+   * \param rng the random number generator, or gen::rng by default. Unused
+   * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
@@ -373,20 +382,22 @@ public:
   /** \brief Reduces the population by selective removal of candidates.
    *
    * Candidates are tested for similarity according to a provided crierion
-   * function. If a pair of candidates `(a, b)` satisfies the test, only `a`
-   * is kept. A minimum number of candidates can be set; if so, the procedure
-   * stops when enough candidates have been removed to satisfy this bound.
+   * function. If a pair of candidates (\b a, \b b) satisfies the test, only
+   * \b a is kept. A minimum number of candidates can be set; if so, the
+   * procedure stops when enough candidates have been removed to satisfy this
+   * bound.
    *
-   * \param test a boolean function accepting two constant Candidate<CBase>
-   * references. Should be symmetric in its arguments. If the return value is
-   * `true` the latter candidate is removed from the population.
+   * \param test a boolean function accepting two constant \link
+   * gen::Candidate Candidate<CBase>\endlink references. Should be symmetric
+   * in its arguments. If the return value is \b true the latter candidate is
+   * removed from the population.
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all duplicates are removed.
    * \param randomize whether to randomly shuffle the sample prior to pruning
-   * (this is the default). If `false` then earlier appearing candidates are
+   * (this is the default). If \b false then earlier appearing candidates are
    * preferred in survival.
-   * \param rng the random number generator, or gen::rng by default. Ignored
-   * if `randomize` is `false`. */
+   * \param rng the random number generator, or gen::rng by default. Unused
+   * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&), size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock(smp);
@@ -409,7 +420,8 @@ public:
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use randomSelect_v(Rng&) const instead. */
+   * allows this, use \link randomSelect_v(Rng&) const randomSelect_v(Rng&)
+   * \endlink instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
   const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
@@ -420,26 +432,29 @@ public:
     internal::read_lock lock(smp);
     size_t sz = size();
     if(sz == 0)
-      throw std::out_of_range("randomSelect(): BasePopulation is empty.");
+      throw std::out_of_range("randomSelect(): Population is empty.");
     std::uniform_int_distribution<size_t> dist{0, sz - 1};
     return operator[](dist(rng));
   }
 
   /** \copybrief randomSelect(Rng&) const
    *
-   * Works like randomSelect(Rng&) const but returns by value. */
+   * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
+   * returns by value. */
   template<class Rng = decltype(rng)>
   Candidate<CBase> NOINLINE randomSelect_v(Rng& rng = rng) const {
     return randomSelect<Candidate<CBase>>(rng);
   }
 
-  /** \brief Randomly selects `k` different candidates. If `k ≥ size()`, the
+  /** \brief Randomly selects \b k different candidates. If <b>k ≥ size()</b>, the
    * entire population is returned.
    *
-   * The returned Ref remains valid until the original population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use randomSelect_v(size_t, Rng&) const instead. */
+   * The returned \link Ref \endlink remains valid until the original
+   * population is modified.  Therefore there is a risk of invalidating it in
+   * a multi-threaded program if another thread concurrently modifies the
+   * population. If your code allows this, use \link
+   * randomSelect_v(size_t, Rng&) const randomSelect_v(size_t, Rng&) \endlink
+   * instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
   Ref randomSelect(size_t k, Rng& rng = rng) const {
@@ -468,8 +483,8 @@ public:
 
   /** \copybrief randomSelect(size_t, Rng&) const
    *
-   * Works like randomSelect(size_t, Rng&) const but returns an independent
-   * BasePopulation. */
+   * Works like \link randomSelect(size_t, Rng&) const randomSelect(size_t,
+   * Rng&) \endlink but returns an independent population. */
   template<class Rng = decltype(rng)>
   Val NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
     return randomSelect<Val>(k, rng);
