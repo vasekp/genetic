@@ -31,15 +31,15 @@ namespace internal {
     rw_semaphore() { }
 
     /* Copy: creates a new semaphore but keeps mod_cnt
-     * (so that if (x,s) are copies of (x_,s_) where x_.last_mod_cnt =
-     * s_.get_mod_cnt() then x.last_mod_cnt = s.get_mod_cnt() */
-    rw_semaphore(const rw_semaphore& s_): mod_cnt(s_.mod_cnt) { }
+     * (so that if (x_,s_) are copies of (x,s) where x.last_mod_cnt =
+     * s.get_mod_cnt() then x_.last_mod_cnt = s_.get_mod_cnt() */
+    rw_semaphore(const rw_semaphore& s): mod_cnt(s.mod_cnt) { }
 
     /* Move: everything can be reused */
     rw_semaphore(rw_semaphore&&) = default;
 
-    rw_semaphore& operator= (const rw_semaphore& s_) {
-      mod_cnt = s_.mod_cnt;
+    rw_semaphore& operator= (const rw_semaphore& s) {
+      mod_cnt = s.mod_cnt;
       return *this;
     }
 
@@ -63,7 +63,7 @@ namespace internal {
 
   protected:
 
-    rw_lock(rw_semaphore& s_, bool w_): s(s_), write(w_) {
+    rw_lock(rw_semaphore& s_, bool write_): s(s_), write(write_) {
       if(write) {
         // Logic: write creates a persistent lock, preventing other writes from
         // starting. They can still execute ++s.w to let themselves known but
