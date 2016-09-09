@@ -151,13 +151,13 @@ public:
   /* Copy and move assignment operators. Ditto as c&m constructors. */
 
   BasePopulation& operator=(const BasePopulation& p) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::operator=(p);
     return *this;
   }
 
   BasePopulation& operator=(BasePopulation&& p) noexcept {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::operator=(std::move(p));
     return *this;
   }
@@ -167,7 +167,7 @@ public:
    * \copydetails add(const Container&) */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation& operator=(const BasePopulation<CBase, ref_, Tag_, Pop_>& p) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::clear();
     Base::insert(Base::end(), p.begin(), p.end());
     return *this;
@@ -176,7 +176,7 @@ public:
   /** \brief Move assignment of a compatible population. */
   template<bool ref_, class Tag_, template<class, bool> class Pop_>
   BasePopulation& operator=(BasePopulation<CBase, ref_, Tag_, Pop_>&& p) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::clear();
     move_add_unguarded(p);
     return *this;
@@ -191,7 +191,7 @@ public:
 
   /** \brief Empties the population. */
   void clear() {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::clear();
   }
 
@@ -200,28 +200,28 @@ public:
    * If \b count is larger than the actual size of the population, all
    * references may be invalidated. */
   void reserve(size_t count) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::reserve(count);
   }
 
   /** \brief Returns an iterator to the beginning. */
   iterator begin() {
-    return iterator(Base::begin());
+    return iterator{Base::begin()};
   }
 
   /** \brief Returns the past-the-end iterator. */
   iterator end() {
-    return iterator(Base::end());
+    return iterator{Base::end()};
   }
 
   /** \brief Returns a constant iterator to the beginning. */
   const_iterator begin() const {
-    return const_iterator(Base::begin());
+    return const_iterator{Base::begin()};
   }
 
   /** \brief Returns the constant past-the-end iterator. */
   const_iterator end() const {
-    return const_iterator(Base::end());
+    return const_iterator{Base::end()};
   }
 
   /** \brief Read-only access to a specified element (no bounds checking). */
@@ -236,13 +236,13 @@ public:
 
   /** \brief Adds a new candidate. */
   void add(const Candidate<CBase>& c) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::push_back(c);
   }
 
   /** \brief Pushes back a new candidate using the move semantics. */
   void add(Candidate<CBase>&& c) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::push_back(std::move(c));
   }
 
@@ -257,7 +257,7 @@ public:
    * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
   void NOINLINE add(size_t count, Source src, bool parallel = true) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
@@ -278,7 +278,7 @@ public:
   /** \brief Copies an iterator range from a container of <b>Candidate</b>s. */
   template<class InputIt>
   void add(InputIt first, InputIt last) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     Base::insert(Base::end(), first, last);
   }
 
@@ -311,7 +311,7 @@ public:
     void>::type
 #endif
   NOINLINE add(Container&& vec) {
-    internal::write_lock lock(smp);
+    internal::write_lock lock{smp};
     move_add_unguarded(std::forward<Container>(vec));
   }
 
@@ -335,7 +335,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. */
   template<class Rng = decltype(rng)>
   void randomTrim(size_t newSize, Rng& rng = rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     if(size() == 0)
@@ -371,7 +371,7 @@ public:
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
     if(randomize)
@@ -407,7 +407,7 @@ public:
   template<class Rng = decltype(rng)>
   void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
     if(randomize)
@@ -436,7 +436,7 @@ public:
   template<class Rng = decltype(rng), class Ret = const Candidate<CBase>&>
   Ret NOINLINE randomSelect(Rng& rng = rng) const {
 #endif
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("randomSelect(): Population is empty.");
@@ -469,10 +469,10 @@ public:
   template<class Rng = decltype(rng), class Ret = Ref>
   Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
 #endif
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     if(k >= sz)
-      return Ret(*this);
+      return Ret{*this};
     std::vector<size_t> idx(sz);
     /* Fisher-Yates intentionally without initialization! */
     for(size_t i = 0; i < k; i++) {
@@ -482,7 +482,7 @@ public:
       idx[i] += i + d;
     }
     idx.resize(k);
-    Ret ret(k);
+    Ret ret{k};
     for(auto i : idx)
       ret.add(operator[](i));
     return ret;

@@ -49,8 +49,8 @@ public:
   Ret NOINLINE front(bool parallel = true) const {
 #endif
     {
-      internal::read_lock lock(smp);
-      internal::read_lock nsga_lock(nsga_smp);
+      internal::read_lock lock{smp};
+      internal::read_lock nsga_lock{nsga_smp};
       if(smp.get_mod_cnt() == nsga_last_mod) {
         Ret ret{};
         for(auto& tg : (Base2&)(*this))
@@ -200,11 +200,11 @@ private:
 
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE NSGASelect_int(double bias, Rng& rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("NSGASelect(): Population is empty.");
-    internal::read_lock nsga_lock(nsga_smp);
+    internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
       nsga_lock.upgrade();
       if(smp.get_mod_cnt() != nsga_last_mod)
@@ -236,8 +236,8 @@ public:
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
   void precompute(bool parallel = true) {
-    internal::read_lock lock(smp);
-    internal::read_lock nsga_lock(nsga_smp);
+    internal::read_lock lock{smp};
+    internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod) {
       nsga_lock.upgrade();
       nsga_rate(parallel);

@@ -250,7 +250,7 @@ class CandidateFactory {
     do {
       gt.push_back(Gene(dTgt(gen::rng), dCtrl(gen::rng)));
     } while(dUni(gen::rng) > probTerm);
-    return Candidate(std::move(gt));
+    return Candidate{std::move(gt)};
   }
 
   Candidate NOINLINE getNew() {
@@ -306,7 +306,7 @@ class CandidateFactory {
     auto gm = p.gt;
     unsigned pos = gen::rng() % p.gt.size();
     gm[pos] = Gene(dTgt(gen::rng), gm[pos].control());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mAlterControl() {
@@ -316,7 +316,7 @@ class CandidateFactory {
     auto gm = p.gt;
     unsigned pos = gen::rng() % p.gt.size();
     gm[pos] = Gene(gm[pos].target(), gm[pos].control() ^ dCtrl(gen::rng));
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mAlterSingle() {
@@ -326,7 +326,7 @@ class CandidateFactory {
     auto gm = p.gt;
     unsigned pos = gen::rng() % p.gt.size();
     gm[pos] = Gene(dTgt(gen::rng), gm[pos].control() ^ dCtrl(gen::rng));
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mAddSlice() {
@@ -343,7 +343,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
     gm.insert(gm.end(), ins.begin(), ins.end());
     gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mAddPairs() {
@@ -365,7 +365,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), std::make_move_iterator(ins.rbegin()), std::make_move_iterator(ins.rend()));
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mDeleteSlice() {
@@ -380,7 +380,7 @@ class CandidateFactory {
     gm.reserve(p.gt.size() - (pos2 - pos1));
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mDeleteSliceShort() {
@@ -396,7 +396,7 @@ class CandidateFactory {
     gm.reserve(p.gt.size() - (pos2 - pos1));
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mDeleteUniform() {
@@ -406,7 +406,7 @@ class CandidateFactory {
     for(auto& g : p.gt)
       if(dUni(gen::rng) >= Config::pDeleteUniform)
         gm.push_back(g);
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mSplitSwap2() {
@@ -418,7 +418,7 @@ class CandidateFactory {
     gm.reserve(p.gt.size());
     gm.insert(gm.end(), p.gt.begin() + pos, p.gt.end());
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos);
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mSplitSwap4() {
@@ -437,7 +437,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.begin() + pos3);
     gm.insert(gm.end(), p.gt.begin() + pos1, p.gt.begin() + pos2);
     gm.insert(gm.end(), p.gt.begin() + pos3, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mSplitSwap5() {
@@ -455,7 +455,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin() + pos[1], p.gt.begin() + pos[2]);
     gm.insert(gm.end(), p.gt.begin() + pos[0], p.gt.begin() + pos[1]);
     gm.insert(gm.end(), p.gt.begin() + pos[3], p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate mReverseSlice() {
@@ -472,7 +472,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p.gt.begin(), p.gt.begin() + pos1);
     gm.insert(gm.end(), p.gt.rbegin() + sz - pos2, p.gt.rbegin() + sz - pos1);
     gm.insert(gm.end(), p.gt.begin() + pos2, p.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate crossover1() {
@@ -486,7 +486,7 @@ class CandidateFactory {
     gm.reserve(pos1 + (gt2.size() - pos2));
     gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1);
     gm.insert(gm.end(), gt2.begin() + pos2, gt2.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate crossover2() {
@@ -505,7 +505,7 @@ class CandidateFactory {
     gm.insert(gm.end(), gt1.begin(), gt1.begin() + pos1l);
     gm.insert(gm.end(), gt2.begin() + pos2l, gt2.begin() + pos2r);
     gm.insert(gm.end(), gt1.begin() + pos1r, gt1.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 
   Candidate threeWay() {
@@ -517,7 +517,7 @@ class CandidateFactory {
     gm.insert(gm.end(), p1.gt.begin(), p1.gt.end());
     gm.insert(gm.end(), p2.gt.begin(), p2.gt.end());
     gm.insert(gm.end(), p3.gt.begin(), p3.gt.end());
-    return Candidate(std::move(gm));
+    return Candidate{std::move(gm)};
   }
 };
 
@@ -593,7 +593,7 @@ int main() {
   std::chrono::time_point<std::chrono::steady_clock> pre, post;
   pre = std::chrono::steady_clock::now();
 
-  Population pop(Config::popSize, [&] { return CandidateFactory::genInit(); });
+  Population pop{Config::popSize, [&] { return CandidateFactory::genInit(); }};
 
   for(int gen = 0; gen < Config::nGen; gen++) {
 
@@ -603,7 +603,7 @@ int main() {
     size_t nd = nondom.size();
 
     /* Top up to popSize2 candidates, precomputing fitnesses */
-    Population pop2(Config::popSize2);
+    Population pop2{Config::popSize2};
     pop.precompute();
     CandidateFactory cf{pop};
     pop2.add(Config::popSize2 - nd, [&]() -> const Candidate { return cf.getNew(); }, true);

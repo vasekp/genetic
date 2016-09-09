@@ -8,6 +8,6 @@ namespace gen {
  * applications of the framework. Similarly, alternative RNGs may be provided
  * to functions like \link BasePopulation::randomSelect()
  * randomSelect()\endlink. */
-static thread_local std::minstd_rand rng{std::random_device()()};
+static thread_local std::minstd_rand rng{std::random_device{}()};
 
 } // namespace gen

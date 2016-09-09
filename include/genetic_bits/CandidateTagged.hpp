@@ -103,11 +103,11 @@ public:
   }
 
   CTIterator operator+(difference_type n) {
-    return CTIterator(It::operator+(n));
+    return CTIterator{It::operator+(n)};
   }
 
   CTIterator operator-(difference_type n) {
-    return CTIterator(It::operator-(n));
+    return CTIterator{It::operator-(n)};
   }
 
 }; // class CTIterator

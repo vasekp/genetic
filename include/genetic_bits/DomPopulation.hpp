@@ -27,7 +27,7 @@ public:
   friend size_t operator<< (const Candidate<CBase>& c,
       const DomPopulation& pop) {
     size_t cnt = 0;
-    internal::read_lock lock(pop.smp);
+    internal::read_lock lock{pop.smp};
     for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
@@ -39,7 +39,7 @@ public:
   friend size_t operator<< (const DomPopulation& pop,
       const Candidate<CBase>& c) {
     size_t cnt = 0;
-    internal::read_lock lock(pop.smp);
+    internal::read_lock lock{pop.smp};
     for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
@@ -61,7 +61,7 @@ public:
   Ret NOINLINE front(bool parallel = true) const {
 #endif
     Ret ret{};
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     std::vector<char> dom(sz, 0);
     #pragma omp parallel for if(parallel)

@@ -103,11 +103,11 @@ private:
 
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE fitnessSelect_int(double bias, Rng& rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("fitnessSelect(): Population is empty.");
-    internal::read_lock fit_lock(fit_smp);
+    internal::read_lock fit_lock{fit_smp};
     if(fitnessSelect_last_mod != smp.get_mod_cnt()
        || bias != fitnessSelect_last_bias) {
       fit_lock.upgrade();
@@ -139,7 +139,7 @@ public:
     if(this->empty())
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     for(auto& c : *this) {
       f = c.fitness();
       sf += f;
@@ -147,7 +147,8 @@ public:
     }
     size_t sz = size();
     double dev2 = sf2/sz - sf/sz*sf/sz;
-    return Stat{sf/sz, dev2 >= 0 ? sqrt(dev2) : 0};
+    return {sf/sz,
+            dev2 >= 0 ? sqrt(dev2) : 0};
   }
 
 }; // class FloatPopulation

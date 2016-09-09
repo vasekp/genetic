@@ -104,7 +104,7 @@ class Candidate {
     std::string s2 = p2.getRE();
     int c1 = std::uniform_int_distribution<>(0,s1.length())(gen::rng);
     int c2 = std::uniform_int_distribution<>(0,s2.length())(gen::rng);
-    return Candidate(s1.substr(0, c1) + s2.substr(c2));
+    return Candidate{s1.substr(0, c1) + s2.substr(c2)};
   }
 
   /* One-allele mutation */
@@ -113,7 +113,7 @@ class Candidate {
     int ix = std::uniform_int_distribution<>(0, str.length())(gen::rng);
     str[ix] = Context::pool[
       std::uniform_int_distribution<>(0, Context::pool.length())(gen::rng)];
-    return Candidate(str);
+    return Candidate{str};
   }
 };
 
@@ -124,7 +124,7 @@ typedef gen::Population<Candidate> Population;
 namespace Context {
   void initDB(std::string fname) {
     std::string r;
-    std::ifstream file(fname);
+    std::ifstream file{fname};
     while(getline(file, r)) {
       if(r == "---") break;
       dbAccept.push_back(r);
@@ -159,7 +159,7 @@ int main() {
           std::vector<char> vec;
           while(rDist(gen::rng) > probTerm)
             vec.push_back(Context::pool[iDist(gen::rng)]);
-          return Candidate(std::string(vec.begin(), vec.end()));
+          return Candidate{std::string(vec.begin(), vec.end())};
         });
   }
 

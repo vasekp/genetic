@@ -44,7 +44,7 @@ public:
      * sorting. If our population was sorted we reflect that by manually
      * incrementing last_sort_mod. If we weren't level before, or if it rose by
      * more than 1, we won't have is_sorted() afterwards, as intended. */
-    internal::write_lock sort_lock(sort_smp);
+    internal::write_lock sort_lock{sort_smp};
     ++last_sort_mod;
   }
 
@@ -63,7 +63,7 @@ public:
   template<class Ret = const Candidate<CBase>&>
   Ret NOINLINE best() {
 #endif
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     if(this->empty())
       throw std::out_of_range("best(): Population is empty.");
     if(is_sorted(lock))
@@ -165,7 +165,7 @@ private:
 
   template<class Ret, class Rng>
   Ret NOINLINE rankSelect_exp(double bias, Rng& rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     double x = uniform(rng);
     size_t sz = size();
     if(sz == 0)
@@ -179,11 +179,11 @@ private:
 
   template<class Ret, double (*fun)(double, double), class Rng>
   Ret NOINLINE rankSelect_two(double bias, Rng& rng) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
       throw std::out_of_range("rankSelect(): Population is empty.");
-    internal::read_lock sort_lock(sort_smp);
+    internal::read_lock sort_lock{sort_smp};
     if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
       sort_lock.upgrade();
       rankSelect_probs.clear();
@@ -207,7 +207,7 @@ public:
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     bool was_sorted = is_sorted(lock);
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
@@ -223,18 +223,18 @@ public:
 private:
 
   bool is_sorted(const internal::rw_lock&) const {
-    internal::read_lock sort_lock(sort_smp);
+    internal::read_lock sort_lock{sort_smp};
     return smp.get_mod_cnt() == last_sort_mod;
   }
 
   void set_sorted(const internal::rw_lock&) {
-    internal::write_lock sort_lock(sort_smp);
+    internal::write_lock sort_lock{sort_smp};
     last_sort_mod = smp.get_mod_cnt();
   }
 
   void ensure_sorted(internal::rw_lock& lock) {
     if(!is_sorted(lock)) {
-      internal::upgrade_lock up(lock);
+      internal::upgrade_lock up{lock};
       // No one else can be reading or modifying this now (⇐ promise)
       ++last_sort_mod;
       if(is_sorted(lock))
