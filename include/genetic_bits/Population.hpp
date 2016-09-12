@@ -60,7 +60,7 @@ using PopulationChooser = typename std::conditional<
  * BasePopulation::Ref for more details.
  *
  * \see NSGAPopulation */
-template<class CBase, bool is_ref = true>
+template<class CBase, bool is_ref = false>
 class Population: public internal::PopulationChooser<CBase, is_ref> {
 
   using Base = internal::PopulationChooser<CBase, is_ref>;
