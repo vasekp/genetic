@@ -139,59 +139,58 @@ public:
 private:
 
   struct nsga_struct {
-    const Candidate<CBase>& r; // reference to a candidate
-    size_t& rank;       // reference to its tag in the original population
-    size_t dom_cnt;     // number of candidates dominating this
-    std::deque<nsga_struct*> q;  // candidates dominated by this
+    const Candidate<CBase>& rCand;    // reference to a candidate
+    size_t& rRank;       // reference to its tag in the original population
+    size_t dom_cnt;      // number of candidates dominating this
+    std::vector<nsga_struct*> dom;    // candidates dominated by this
+
+    nsga_struct(const Candidate<CBase>& rCand_, size_t& rRank_):
+      rCand(rCand_), rRank(rRank_), dom_cnt(0), dom{} { };
   };
 
   void NOINLINE nsga_rate(bool parallel = false) {
-    std::list<nsga_struct> ref{};
-    for(auto& tg : Base::as_vec())
-      ref.push_back(nsga_struct{
+    std::vector<nsga_struct> vec{};
+    std::vector<nsga_struct*> ref{};
+    size_t sz = size();
+    vec.reserve(sz);
+    ref.reserve(sz);
+    for(auto& tg : Base::as_vec()) {
+      vec.push_back({
         static_cast<const Candidate<CBase>&>(tg),
-        tg.tag(),
-        0,
-        {}
+        tg.tag()
       });
-    #pragma omp parallel if(parallel)
-    {
-      #pragma omp single
-      for(auto& r : ref) {
-        nsga_struct* pr = &r;
-        #pragma omp task firstprivate(pr)
-        for(auto& s : ref)
-          if(pr->r << s.r) {
-            pr->q.push_back(&s);
-            #pragma omp atomic
-            s.dom_cnt++;
-          }
-      }
+      ref.push_back(&vec.back());
     }
-    size_t cur_rank = 0;
+    #pragma omp parallel for if(parallel)
+    for(size_t i = 0; i < sz; i++)
+      for(size_t j = 0; j < sz; j++)
+        if(vec[i].rCand << vec[j].rCand) {
+          vec[i].dom.push_back(&vec[j]);
+          #pragma omp atomic
+          vec[j].dom_cnt++;
+        }
     /* ref contains the candidates with yet unassigned rank. When this becomes
      * empty, we're done. */
+    size_t cur_rank = 0;
+    std::vector<nsga_struct> cur_front{};
     while(ref.size() > 0) {
-      std::vector<nsga_struct> cur_front{};
-      {
-        auto it = ref.begin();
-        auto end = ref.end();
-        while(it != end) {
-          /* It *it is nondominated, move it to cur_front and remove from the
-           * list. std::list was chosen so that both operations are O(1). */
-          if(it->dom_cnt == 0) {
-            cur_front.push_back(std::move(*it));
-            ref.erase(it++);
-          } else
-            it++;
+      cur_front.clear();
+      for(auto& ps : ref)
+        if(ps->dom_cnt == 0) {
+          cur_front.push_back(std::move(*ps));
+          ps->dom_cnt = 0;
         }
+      {
+        auto new_end = std::remove_if(ref.begin(), ref.end(),
+            [](const nsga_struct* ps) -> bool { return ps->dom_cnt == 0; });
+        ref.erase(new_end, ref.end());
       }
       /* Break arrows from members of cur_front and assign final rank to
        * them */
       for(auto& r : cur_front) {
-        for(auto q : r.q)
-          q->dom_cnt--;
-        r.rank = cur_rank;
+        for(auto pdom : r.dom)
+          pdom->dom_cnt--;
+        r.rRank = cur_rank;
       }
       cur_rank++;
     }
