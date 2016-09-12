@@ -20,10 +20,6 @@ class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
   size_t rankSelect_last_sz{};
   double rankSelect_last_bias{};
 
-  /* Befriend all compatible OrdPopulations for access to their is_sorted() */
-  template<class, bool, class, template<class, bool> class>
-  friend class OrdPopulation;
-
 public:
 
   using Base::Base;
@@ -208,7 +204,6 @@ public:
    * is satisfied, the population is unchanged. */
   void rankTrim(size_t newSize) {
     internal::read_lock lock{smp};
-    bool was_sorted = is_sorted(lock);
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
     if(size() == 0)
@@ -216,8 +211,24 @@ public:
     ensure_sorted(lock);
     auto& dummy = Base::first(); // see BasePopulation::randomTrim()
     Base::as_vec().resize(newSize, dummy);
-    if(was_sorted)
-      set_sorted(lock);
+    // See reserve()
+    // No sort_lock needed (have write_lock(smp))
+    ++last_sort_mod;
+  }
+
+  /** \brief Sorts the population by fitness for faster response of future
+   * rankSelect() calls.
+   *
+   * This happens by default whenever rankSelect() is called after the
+   * population has been modified. However, since the sorting can be a rather
+   * expensive operation, in a multithreaded setting this would mean all other
+   * threads have to wait for the calling thread to finish the sorting before
+   * proceeding. This method can be called before the work is split between
+   * threads. Parallel sorting is currently not supported but this can still
+   * be used to guarantee a better balanced workload for individual threads. */
+  void sort() {
+    internal::read_lock lock{smp};
+    ensure_sorted(lock);
   }
 
 private:
@@ -225,11 +236,6 @@ private:
   bool is_sorted(const internal::rw_lock&) const {
     internal::read_lock sort_lock{sort_smp};
     return smp.get_mod_cnt() == last_sort_mod;
-  }
-
-  void set_sorted(const internal::rw_lock&) {
-    internal::write_lock sort_lock{sort_smp};
-    last_sort_mod = smp.get_mod_cnt();
   }
 
   void ensure_sorted(internal::rw_lock& lock) {
@@ -240,7 +246,7 @@ private:
       if(is_sorted(lock))
         return;
       std::sort(Base::as_vec().begin(), Base::as_vec().end());
-      set_sorted(lock);
+      last_sort_mod = smp.get_mod_cnt();
     }
   }
 
