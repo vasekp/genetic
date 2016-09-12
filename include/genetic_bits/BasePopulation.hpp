@@ -224,14 +224,19 @@ public:
     return const_iterator{Base::end()};
   }
 
-  /** \brief Read-only access to a specified element (no bounds checking). */
+  /** \brief Read-only access to a specified element by reference (no bounds checking). */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
 
-  /** \brief Read-only access to a specified element (with bounds checking). */
+  /** \brief Read-only access to a specified element by reference (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
+  }
+
+  /** \brief Returns a specified element by value (with bounds checking) */
+  Candidate<CBase> at_v(size_t pos) const {
+    return static_cast<const Candidate<CBase>>(Base::at(pos));
   }
 
   /** \brief Adds a new candidate. */
