@@ -9,11 +9,16 @@ struct empty { };
 /* Wrapper for non-class Tags */
 template<typename Tag>
 struct TagWrap {
+
   Tag t;
+
   TagWrap(): t() { }
-  TagWrap(Tag& _t): t(_t) { }
+
+  TagWrap(Tag& t_): t(t_) { }
+
   operator Tag&() { return t; }
-};
+
+}; // class TagWrap
 
 /* This specialization is an empty class, as a base it will take no extra
  * memory. (This would not hold if there was a named member like in the
@@ -21,8 +26,10 @@ struct TagWrap {
  * requests the tag. */
 template<>
 struct TagWrap<empty>: empty {
+
   TagWrap(...) { }
-};
+
+}; // class TagWrap
 
 
 
@@ -40,27 +47,30 @@ using CTBase = typename std::conditional<ref,
  * encounter this mechanism directly as it transparently casts to a const
  * Candidate&. */
 template<class CBase, bool ref, typename Tag>
-struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
+struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   using reference = const gen::Candidate<CBase>&;
   using rv_reference = CTBase<CBase, ref>&&;
 
-  CandidateTagged(const gen::Candidate<CBase>& _c): CTBase<CBase, ref>(_c) { }
+  CandidateTagged(const gen::Candidate<CBase>& c): CTBase<CBase, ref>(c) { }
 
-  CandidateTagged(CTBase<CBase, ref>&& _c): CTBase<CBase, ref>(std::move(_c)) { }
+  CandidateTagged(CTBase<CBase, ref>&& c): CTBase<CBase, ref>(std::move(c)) { }
 
-  Tag& tag() { return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this)); }
+  Tag& tag() {
+    return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this));
+  }
 
   friend inline bool
   operator< (const CandidateTagged& c1, const CandidateTagged& c2) {
-    return (const gen::Candidate<CBase>&)(c1) < (const gen::Candidate<CBase>&)(c2);
+    return static_cast<reference>(c1) < static_cast<reference>(c2);
   }
 
   friend inline bool
   operator<< (const CandidateTagged& c1, const CandidateTagged& c2) {
-    return (const gen::Candidate<CBase>&)(c1) << (const gen::Candidate<CBase>&)(c2);
+    return static_cast<reference>(c1) << static_cast<reference>(c2);
   }
-};
+
+}; // class CandidateTagged
 
 
 
@@ -69,38 +79,58 @@ struct CandidateTagged: public CTBase<CBase, ref>, private TagWrap<Tag> {
  * Candidate&& or std::reference_wrapper<Candidate>&&.) */
 template<class It, bool move = false>
 class CTIterator: public It {
-  public:
-  typedef typename std::conditional<move,
+
+public:
+
+  using Target = typename std::conditional<move,
     typename It::value_type::rv_reference,
-    typename It::value_type::reference>::type Target;
-  typedef typename It::iterator_category iterator_category;
-  typedef typename It::difference_type difference_type;
-  typedef Target value_type;
-  typedef Target reference;
-  typedef typename std::add_pointer<Target>::type pointer;
+    typename It::value_type::reference>::type;
+
+  using iterator_category = typename It::iterator_category;
+  using difference_type   = typename It::difference_type;
+  using value_type        = Target;
+  using reference         = Target;
+  using pointer           = typename std::add_pointer<Target>::type;
 
   CTIterator(It it): It(it) { };
-  reference operator*() const { return static_cast<Target>(It::operator*()); }
-  pointer operator->() const { return &operator*(); }
-  CTIterator operator+(difference_type n) { return CTIterator(It::operator+(n)); }
-  CTIterator operator-(difference_type n) { return CTIterator(It::operator-(n)); }
-};
+
+  reference operator*() const {
+    return static_cast<Target>(It::operator*());
+  }
+
+  pointer operator->() const {
+    return &operator*();
+  }
+
+  CTIterator operator+(difference_type n) {
+    return CTIterator{It::operator+(n)};
+  }
+
+  CTIterator operator-(difference_type n) {
+    return CTIterator{It::operator-(n)};
+  }
+
+}; // class CTIterator
 
 
 /* We need a specialization of std::move_iterator for our CTIterator. */
 template<class It>
 class move_iterator: public std::move_iterator<It> {
-  public:
+
+public:
+
   explicit move_iterator(It it): std::move_iterator<It>(it) { }
-};
+
+}; // class move_iterator<CTIterator>
 
 template<class It>
-class move_iterator<CTIterator<It, false>>:
-public CTIterator<It, true> {
-  public:
-  explicit move_iterator(CTIterator<It> it):
-      CTIterator<It, true>(it) { }
-};
+class move_iterator<CTIterator<It, false>>: public CTIterator<It, true> {
+
+public:
+
+  explicit move_iterator(CTIterator<It> it): CTIterator<It, true>(it) { }
+
+}; // class move_iterator<CTIterator>
 
 } // namespace internal
 

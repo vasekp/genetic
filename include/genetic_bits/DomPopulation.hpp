@@ -3,11 +3,12 @@ namespace gen {
 /** \brief The DomPopulation template, adding functionality dependent on
  * partial (dominance) ordering between candidates to a BasePopulation.
  * \copydetails gen::BasePopulation */
-template<class CBase, bool is_ref, class Tag, template<class, bool> class Population>
-class DomPopulation : public BasePopulation<CBase, is_ref, Tag, Population> {
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
-  typedef BasePopulation<CBase, is_ref, Tag, Population> Base;
-  typedef internal::PBase<CBase, is_ref, Tag> Base2;
+  using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Base2 = internal::PBase<CBase, is_ref, Tag>;
 
 public:
 
@@ -23,9 +24,10 @@ public:
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const Candidate<CBase>& c, const DomPopulation& pop) {
+  friend size_t operator<< (const Candidate<CBase>& c,
+      const DomPopulation& pop) {
     size_t cnt = 0;
-    internal::read_lock lock(pop.smp);
+    internal::read_lock lock{pop.smp};
     for(auto& cmp : pop)
       if(c << cmp)
         cnt++;
@@ -34,9 +36,10 @@ public:
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const DomPopulation& pop, const Candidate<CBase>& c) {
+  friend size_t operator<< (const DomPopulation& pop,
+      const Candidate<CBase>& c) {
     size_t cnt = 0;
-    internal::read_lock lock(pop.smp);
+    internal::read_lock lock{pop.smp};
     for(auto& cmp : pop)
       if(cmp << c)
         cnt++;
@@ -45,10 +48,10 @@ public:
 
   /** \brief Returns a nondominated subset of this population.
    *
-   * The returned Ref remains valid until the original population is modified.
-   * Therefore there is a risk of invalidating it in a multi-threaded program
-   * if another thread concurrently modifies the population. If your code
-   * allows this, use front_v() instead.
+   * The returned \link Ref \endlink remains valid until the original
+   * population is modified.  Therefore there is a risk of invalidating it in
+   * a multi-threaded program if another thread concurrently modifies the
+   * population. If your code allows this, use front_v() instead.
    *
    * \param parallel controls parallelization using OpenMP (on by default) */
 #ifdef DOXYGEN
@@ -58,7 +61,7 @@ public:
   Ret NOINLINE front(bool parallel = true) const {
 #endif
     Ret ret{};
-    internal::read_lock lock(smp);
+    internal::read_lock lock{smp};
     size_t sz = size();
     std::vector<char> dom(sz, 0);
     #pragma omp parallel for if(parallel)
@@ -76,7 +79,7 @@ public:
 
   /** \copybrief front()
    *
-   * Works like front() but returns an independent DomPopulation. */
+   * Works like front() but returns an independent population. */
   typename Base::Val NOINLINE front_v(bool parallel = true) const {
     return front<typename Base::Val>(parallel);
   }
