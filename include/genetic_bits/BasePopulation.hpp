@@ -239,6 +239,29 @@ public:
     return static_cast<const Candidate<CBase>>(Base::at(pos));
   }
 
+protected:
+
+#ifndef DOXYGEN
+  /* Used for iterating directly over std::vector<CandidateTagged>. */
+  Base& as_vec() {
+    return static_cast<Base&>(*this);
+  }
+
+  const Base& as_vec() const {
+    return static_cast<const Base&>(*this);
+  }
+
+  const Candidate<CBase>& first() {
+    return Base::front();
+  }
+
+  const Candidate<CBase>& last() {
+    return Base::back();
+  }
+#endif
+
+public:
+
   /** \brief Adds a new candidate. */
   void add(const Candidate<CBase>& c) {
     internal::write_lock lock{smp};

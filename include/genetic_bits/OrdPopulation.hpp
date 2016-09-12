@@ -8,7 +8,6 @@ template<class CBase, bool is_ref, class Tag,
 class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
-  using Base2 = internal::PBase<CBase, is_ref, Tag>;
 
   /* Protects: last_sort_mod, rankSelect_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
@@ -67,7 +66,7 @@ public:
     if(this->empty())
       throw std::out_of_range("best(): Population is empty.");
     if(is_sorted(lock))
-      return Base2::front();
+      return Base::first();
     else
       return *std::min_element(begin(), end());
   }
@@ -171,8 +170,9 @@ private:
     if(sz == 0)
       throw std::out_of_range("rankSelect(): Population is empty.");
     ensure_sorted(lock);
+    // Bug in GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63176
     if(x == 1)
-      return Base2::back();
+      return Base::last();
     else
       return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
@@ -214,8 +214,8 @@ public:
     if(size() == 0)
       return;
     ensure_sorted(lock);
-    auto& dummy = Base2::front(); // see BasePopulation::randomTrim()
-    Base2::resize(newSize, dummy);
+    auto& dummy = Base::first(); // see BasePopulation::randomTrim()
+    Base::as_vec().resize(newSize, dummy);
     if(was_sorted)
       set_sorted(lock);
   }
@@ -239,7 +239,7 @@ private:
       ++last_sort_mod;
       if(is_sorted(lock))
         return;
-      std::sort(Base2::begin(), Base2::end());
+      std::sort(Base::as_vec().begin(), Base::as_vec().end());
       set_sorted(lock);
     }
   }

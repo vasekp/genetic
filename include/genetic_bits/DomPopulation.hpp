@@ -8,7 +8,6 @@ template<class CBase, bool is_ref, class Tag,
 class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
-  using Base2 = internal::PBase<CBase, is_ref, Tag>;
 
 public:
 

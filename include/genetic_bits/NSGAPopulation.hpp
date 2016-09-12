@@ -18,7 +18,6 @@ class NSGAPopulation:
       "The fitness type of CBase needs to support bool operator<<()!");
 
   using Base = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
-  using Base2 = internal::PBase<CBase, is_ref, size_t>;
 
   /* Protects: nsga_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
@@ -53,9 +52,9 @@ public:
       internal::read_lock nsga_lock{nsga_smp};
       if(smp.get_mod_cnt() == nsga_last_mod) {
         Ret ret{};
-        for(auto& tg : (Base2&)(*this))
+        for(auto& tg : Base::as_vec())
           if(tg.tag() == 0)
-            ret.add(static_cast<Candidate<CBase>&>(tg));
+            ret.add(static_cast<const Candidate<CBase>&>(tg));
         return ret;
       }
     }
@@ -148,7 +147,7 @@ private:
 
   void NOINLINE nsga_rate(bool parallel = false) {
     std::list<nsga_struct> ref{};
-    for(auto& tg : static_cast<Base2&>(*this))
+    for(auto& tg : Base::as_vec())
       ref.push_back(nsga_struct{
         static_cast<const Candidate<CBase>&>(tg),
         tg.tag(),
@@ -211,7 +210,7 @@ private:
         nsga_rate(false);
       nsga_probs.clear();
       nsga_probs.reserve(sz);
-      for(auto& tg : static_cast<Base2&>(*this))
+      for(auto& tg : Base::as_vec())
         nsga_probs.push_back(1 / fun(tg.tag(), bias));
       nsga_dist = std::discrete_distribution<size_t>
         (nsga_probs.begin(), nsga_probs.end());
