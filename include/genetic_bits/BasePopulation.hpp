@@ -391,31 +391,26 @@ public:
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all candidates satisfying the predicate are
    * removed.
-   * \param randomize whether to randomly shuffle the sample prior to pruning
-   * (this is the default). If \b false then earlier appearing candidates are
-   * preferred in survival.
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&),
-      size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void NOINLINE prune(bool (*test)(const Candidate<CBase>&),
+      size_t minSize = 0, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
-    if(randomize)
-      shuffle(rng);
     size_t sz = size();
-    for(size_t i = 0; i < sz - 1; i++)
-      if(test(operator[](i))) {
-        Base::erase(Base::begin() + i);
-        if(--sz <= minSize)
-          return;
-      }
+    typedef decltype(Base::front()) reference;
+    auto new_end = std::remove_if(Base::begin(), Base::end(),
+        [&](reference& op) {
+          return test(static_cast<const Candidate<CBase>&>(op)) && --sz >= minSize;
+        });
+    Base::erase(new_end, Base::end());
   }
 
   /** \brief Reduces the population by selective removal of candidates.
    *
-   * Candidates are tested for similarity according to a provided crierion
+   * Candidates are tested for similarity according to a provided criterion
    * function. If a pair of candidates (\b a, \b b) satisfies the test, only
    * \b a is kept. A minimum number of candidates can be set; if so, the
    * procedure stops when enough candidates have been removed to satisfy this
@@ -433,7 +428,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
+  void NOINLINE prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
@@ -441,13 +436,16 @@ public:
     if(randomize)
       shuffle(rng);
     size_t sz = size();
-    for(size_t i = 0; i < sz - 1; i++)
-      for(size_t j = sz - 1; j > i; j--)
-        if(test(operator[](i), operator[](j))) {
-          Base::erase(Base::begin() + j);
-          if(--sz <= minSize)
-            return;
-        }
+    typedef decltype(Base::front()) reference;
+    auto new_end = Base::end();
+    for(size_t i = 0; i < sz - 1; i++) {
+      const Candidate<CBase>& op1 = operator[](i);
+      new_end = std::remove_if(Base::begin() + i + 1, new_end,
+          [&](reference& op2) {
+            return test(op1, static_cast<const Candidate<CBase>&>(op2)) && --sz >= minSize;
+          });
+    }
+    Base::erase(new_end, Base::end());
   }
 
   /** \brief Retrieves a candidate chosen using uniform random selection.
