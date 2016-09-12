@@ -224,15 +224,43 @@ public:
     return const_iterator{Base::end()};
   }
 
-  /** \brief Read-only access to a specified element (no bounds checking). */
+  /** \brief Read-only access to a specified element by reference (no bounds checking). */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
 
-  /** \brief Read-only access to a specified element (with bounds checking). */
+  /** \brief Read-only access to a specified element by reference (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
+
+  /** \brief Returns a specified element by value (with bounds checking) */
+  Candidate<CBase> at_v(size_t pos) const {
+    return static_cast<const Candidate<CBase>>(Base::at(pos));
+  }
+
+protected:
+
+#ifndef DOXYGEN
+  /* Used for iterating directly over std::vector<CandidateTagged>. */
+  Base& as_vec() {
+    return static_cast<Base&>(*this);
+  }
+
+  const Base& as_vec() const {
+    return static_cast<const Base&>(*this);
+  }
+
+  const Candidate<CBase>& first() {
+    return Base::front();
+  }
+
+  const Candidate<CBase>& last() {
+    return Base::back();
+  }
+#endif
+
+public:
 
   /** \brief Adds a new candidate. */
   void add(const Candidate<CBase>& c) {
