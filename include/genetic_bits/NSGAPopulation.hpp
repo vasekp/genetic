@@ -152,6 +152,8 @@ private:
     std::vector<nsga_struct> vec{};
     std::vector<nsga_struct*> ref{};
     size_t sz = size();
+    /* vec: size() preallocated nsga_structs, each pointing to one Candidate
+     * ref: size() pointers to vec, originally 1:1 in order */
     vec.reserve(sz);
     ref.reserve(sz);
     for(auto& tg : Base::as_vec()) {
@@ -161,15 +163,18 @@ private:
       });
       ref.push_back(&vec.back());
     }
+    /* Calculate dominance counts and lists of dominated candidates */
     #pragma omp parallel for if(parallel)
-    for(size_t i = 0; i < sz; i++)
-      for(size_t j = 0; j < sz; j++)
-        if(vec[i].rCand << vec[j].rCand) {
-          vec[i].dom.push_back(&vec[j]);
+    for(size_t i = 0; i < sz; i++) {
+      nsga_struct& op1 = vec[i];
+      for(nsga_struct& op2 : vec)
+        if(op1.rCand << op2.rCand) {
+          op1.dom.push_back(&op2);
           #pragma omp atomic
-          vec[j].dom_cnt++;
+          op2.dom_cnt++;
         }
-    /* ref contains the candidates with yet unassigned rank. When this becomes
+    }
+    /* ref contains the candidates with yet unassigned rank. When it becomes
      * empty, we're done. */
     size_t cur_rank = 0;
     std::vector<nsga_struct> cur_front{};
