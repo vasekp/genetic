@@ -9,8 +9,11 @@ test*
 *.p
 *.od
 *.op
+*.gp
+*.gpb
 doc
 gmon.out
+pprof.out
 
 # historic files
 hist
