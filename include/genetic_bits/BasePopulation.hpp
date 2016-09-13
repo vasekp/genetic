@@ -286,7 +286,7 @@ public:
    * function call can be inlined by the optimizer if known at compile time.
    * \param parallel controls parallelization using OpenMP (on by default) */
   template<class Source>
-  void NOINLINE add(size_t count, Source src, bool parallel = true) {
+  NOINLINE void add(size_t count, Source src, bool parallel = true) {
     internal::write_lock lock{smp};
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
@@ -322,7 +322,7 @@ public:
 #else
   typename std::enable_if<internal::is_container<Container>(0), void>::type
 #endif
-  NOINLINE add(const Container& vec) {
+  add(const Container& vec) {
     add(vec.begin(), vec.end());
   }
 
@@ -340,7 +340,7 @@ public:
       std::is_rvalue_reference<Container&&>::value,
     void>::type
 #endif
-  NOINLINE add(Container&& vec) {
+  add(Container&& vec) {
     internal::write_lock lock{smp};
     move_add_unguarded(std::forward<Container>(vec));
   }
@@ -348,7 +348,7 @@ public:
 private:
 
   template<class Container>
-  void NOINLINE move_add_unguarded(Container&& vec) {
+  void move_add_unguarded(Container&& vec) {
     Base::insert(Base::end(),
         internal::move_iterator<decltype(vec.begin())>(vec.begin()),
         internal::move_iterator<decltype(vec.end())>(vec.end()));
@@ -396,7 +396,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void NOINLINE prune(bool (*test)(const Candidate<CBase>&),
+  NOINLINE void prune(bool (*test)(const Candidate<CBase>&),
       size_t minSize = 0, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
@@ -430,7 +430,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void NOINLINE prune(
+  NOINLINE void prune(
       bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
@@ -463,7 +463,7 @@ public:
   const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = const Candidate<CBase>&>
-  Ret NOINLINE randomSelect(Rng& rng = rng) const {
+  Ret randomSelect(Rng& rng = rng) const {
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
@@ -478,7 +478,7 @@ public:
    * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
    * returns by value. */
   template<class Rng = decltype(rng)>
-  Candidate<CBase> NOINLINE randomSelect_v(Rng& rng = rng) const {
+  Candidate<CBase> randomSelect_v(Rng& rng = rng) const {
     return randomSelect<Candidate<CBase>>(rng);
   }
 
@@ -496,7 +496,7 @@ public:
   Ref randomSelect(size_t k, Rng& rng = rng) const {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
-  Ret NOINLINE randomSelect(size_t k, Rng& rng = rng) const {
+  NOINLINE Ret randomSelect(size_t k, Rng& rng = rng) const {
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
@@ -522,7 +522,7 @@ public:
    * Works like \link randomSelect(size_t, Rng&) const randomSelect(size_t,
    * Rng&) \endlink but returns an independent population. */
   template<class Rng = decltype(rng)>
-  Val NOINLINE randomSelect_v(size_t k, Rng& rng = rng) const {
+  Val randomSelect_v(size_t k, Rng& rng = rng) const {
     return randomSelect<Val>(k, rng);
   }
 

@@ -24,7 +24,7 @@ public:
 
   /** \brief Returns the number of candidates in this population dominated by
    * a given candidate. */
-  friend size_t operator<< (const Candidate<CBase>& c,
+  friend NOINLINE size_t operator<< (const Candidate<CBase>& c,
       const DomPopulation& pop) {
     size_t cnt = 0;
     internal::read_lock lock{pop.smp};
@@ -36,7 +36,7 @@ public:
 
   /** \brief Returns the number of candidates in this population that
    * dominate a given candidate. */
-  friend size_t operator<< (const DomPopulation& pop,
+  friend NOINLINE size_t operator<< (const DomPopulation& pop,
       const Candidate<CBase>& c) {
     size_t cnt = 0;
     internal::read_lock lock{pop.smp};
@@ -58,7 +58,7 @@ public:
   Ref front(bool parallel = true) const {
 #else
   template<class Ret = typename Base::Ref>
-  Ret NOINLINE front(bool parallel = true) const {
+  NOINLINE Ret front(bool parallel = true) const {
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
@@ -82,7 +82,7 @@ public:
   /** \copybrief front()
    *
    * Works like front() but returns an independent population. */
-  typename Base::Val NOINLINE front_v(bool parallel = true) const {
+  typename Base::Val front_v(bool parallel = true) const {
     return front<typename Base::Val>(parallel);
   }
 
