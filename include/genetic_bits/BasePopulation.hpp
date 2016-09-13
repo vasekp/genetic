@@ -224,12 +224,14 @@ public:
     return const_iterator{Base::end()};
   }
 
-  /** \brief Read-only access to a specified element by reference (no bounds checking). */
+  /** \brief Read-only access to a specified element by reference
+   * (no bounds checking). */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
 
-  /** \brief Read-only access to a specified element by reference (with bounds checking). */
+  /** \brief Read-only access to a specified element by reference
+   * (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
@@ -428,7 +430,8 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void NOINLINE prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
+  void NOINLINE prune(
+      bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
