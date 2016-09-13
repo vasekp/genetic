@@ -1,7 +1,8 @@
 namespace gen {
 
 /** \brief The DomPopulation template, adding functionality dependent on
- * partial (dominance) ordering between candidates to a BasePopulation.
+ * dominance relation between candidates to a BasePopulation. Base class of
+ * NSGAPopulation.
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
