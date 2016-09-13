@@ -1,6 +1,7 @@
 namespace gen {
 
-/** \brief The Candidate template.
+/** \brief The Candidate template, wrapping a base candidate class to allow
+ * fitness caching.
  *
  * Takes a base class \b CBase which needs to implement a stateless function of
  * signature
@@ -8,8 +9,8 @@ namespace gen {
  * Fitness CBase::fitness() const
  * ```
  * Here, \b Fitness can be a simple type or a class, optionally supporting
- * <b>bool operator<()</b>, representing a total ordering, or <b>bool
- * operator<<()</b>, representing a partial ordering. If either of the
+ * <b>bool %operator<()</b>, representing a total ordering, or <b>bool
+ * %operator<<()</b>, representing a strict partial ordering. If either of the
  * operators exist, they are extended to the Candidate type, comparing the
  * fitness of two candidates.  This is used to switch accessibility of various
  * Population methods.
@@ -82,11 +83,11 @@ public:
   /** \brief Compares two <b>Candidate</b>s by the <b>Fitness</b>'s \b
    * %operator<<().
    *
-   * The \b %operator<<() of \b Fitness is expected to be a partial ordering
-   * denoting dominance in multiobjective searches (used by DomPopulation
-   * and its derived classes). This method is not generated if
-   * <b>Fitness::operator<<()</b> does not exist or does not return a boolean
-   * value. */
+   * The \b %operator<<() of \b Fitness is expected to be a strict partial
+   * ordering denoting dominance (\b c1 *dominates* \b c2) in multiobjective
+   * searches (used by DomPopulation and NSGAPopulation). This method is not
+   * generated if <b>Fitness::operator<<()</b> does not exist or does not
+   * return a boolean value. */
   friend inline bool
   operator<< (const Candidate& c1, const Candidate& c2) {
     return c1.fitness() << c2.fitness();

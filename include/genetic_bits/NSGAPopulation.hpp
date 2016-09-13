@@ -4,9 +4,9 @@ namespace gen {
  * selection methods.
  *
  * \tparam CBase the base class of the member candidates of this population.
- * Must implement a partial (dominance) order given by a <b>bool
- * %operator<<()</b>, otherwise a compile-time error is generated.  See
- * Candidate for further details.
+ * The type returned by \b CBase::fitness() must implement a strict partial
+ * order (\b a *dominates* \b b) given by a <b>bool %operator<<()</b>,
+ * otherwise a compile-time error is generated.
  * \tparam is_ref if set to \b true, this is a reference population. See \link
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
