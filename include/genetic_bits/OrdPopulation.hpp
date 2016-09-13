@@ -56,7 +56,7 @@ public:
   const Candidate<CBase>& best() {
 #else
   template<class Ret = const Candidate<CBase>&>
-  Ret NOINLINE best() {
+  Ret best() {
 #endif
     internal::read_lock lock{smp};
     if(this->empty())
@@ -159,7 +159,7 @@ public:
 private:
 
   template<class Ret, class Rng>
-  Ret NOINLINE rankSelect_exp(double bias, Rng& rng) {
+  NOINLINE Ret rankSelect_exp(double bias, Rng& rng) {
     internal::read_lock lock{smp};
     double x = uniform(rng);
     size_t sz = size();
@@ -174,7 +174,7 @@ private:
   }
 
   template<class Ret, double (*fun)(double, double), class Rng>
-  Ret NOINLINE rankSelect_two(double bias, Rng& rng) {
+  NOINLINE Ret rankSelect_two(double bias, Rng& rng) {
     internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
@@ -202,7 +202,7 @@ public:
    *
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
-  void rankTrim(size_t newSize) {
+  NOINLINE void rankTrim(size_t newSize) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
       return;
@@ -226,7 +226,7 @@ public:
    * proceeding. This method can be called before the work is split between
    * threads. Parallel sorting is currently not supported but this can still
    * be used to guarantee a better balanced workload for individual threads. */
-  void sort() {
+  NOINLINE void sort() {
     internal::read_lock lock{smp};
     ensure_sorted(lock);
   }

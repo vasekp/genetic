@@ -113,7 +113,7 @@ class Gene {
       : src;
   }
 
-  friend std::ostream& NOINLINE operator<< (std::ostream& os, const Gene& g) {
+  friend NOINLINE std::ostream& operator<< (std::ostream& os, const Gene& g) {
     os << g.tgt+1;
     auto c = g.ctrl;
     if(c != 0) {
@@ -134,7 +134,7 @@ struct Fitness {
   size_t length;
   unsigned controls;
 
-  friend bool NOINLINE operator<< (const Fitness& a, const Fitness& b) {
+  friend NOINLINE bool operator<< (const Fitness& a, const Fitness& b) {
     return a.misInput < b.misInput || (a.misInput == b.misInput && a.misOutput <= b.misOutput && a.length <= b.length && a.controls <= b.controls && !(a == b));
   }
 
@@ -253,7 +253,7 @@ class CandidateFactory {
     return Candidate{std::move(gt)};
   }
 
-  Candidate NOINLINE getNew() {
+  NOINLINE Candidate getNew() {
     int index = dFun(gen::rng);
     Candidate c = (this->*func[index].first)();
     c.setOrigin(index);
