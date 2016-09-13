@@ -102,7 +102,7 @@ public:
 private:
 
   template<class Ret, double (*fun)(double, double), class Rng>
-  Ret NOINLINE fitnessSelect_int(double bias, Rng& rng) {
+  NOINLINE Ret fitnessSelect_int(double bias, Rng& rng) {
     internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)
@@ -135,7 +135,7 @@ public:
    * deviation.
    *
    * \see Stat */
-  Stat stat() const {
+  NOINLINE Stat stat() const {
     if(this->empty())
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
