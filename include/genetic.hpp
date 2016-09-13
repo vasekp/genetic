@@ -2,8 +2,6 @@
 #define GENETIC_H
 
 #include <vector>
-#include <deque>
-#include <list>
 #include <random>
 #include <algorithm>
 #include <type_traits>
