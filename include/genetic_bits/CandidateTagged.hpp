@@ -18,11 +18,13 @@ struct TagWrap {
 
   operator Tag&() { return t; }
 
+  operator const Tag&() const { return t; }
+
 }; // class TagWrap
 
 /* This specialization is an empty class, as a base it will take no extra
  * memory. (This would not hold if there was a named member like in the
- * above.) Also, tag() function is missing so the compilation fails if anyone
+ * above.) Also, operator Tag&() is missing so the compilation fails if anyone
  * requests the tag. */
 template<>
 struct TagWrap<empty>: empty {
@@ -58,6 +60,10 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   Tag& tag() {
     return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this));
+  }
+
+  const Tag& tag() const {
+    return static_cast<const Tag&>(static_cast<const TagWrap<Tag>&>(*this));
   }
 
   friend inline bool

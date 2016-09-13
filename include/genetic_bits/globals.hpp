@@ -1,4 +1,8 @@
-/** \brief The main namespace of the framework. */
+/** \brief The main namespace of the framework.
+ *
+ * The entry point of most applications is either gen::Population or
+ * gen::NSGAPopulation. Other <b>...%Population</b> classes are not intended
+ * to be used directly. */
 namespace gen {
 
 /** \brief The default random number generator for this framework.

@@ -134,7 +134,7 @@ struct Fitness {
   size_t length;
   unsigned controls;
 
-  friend bool operator<< (const Fitness& a, const Fitness& b) {
+  friend bool NOINLINE operator<< (const Fitness& a, const Fitness& b) {
     return a.misInput < b.misInput || (a.misInput == b.misInput && a.misOutput <= b.misOutput && a.length <= b.length && a.controls <= b.controls && !(a == b));
   }
 

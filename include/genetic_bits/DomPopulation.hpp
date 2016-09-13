@@ -1,14 +1,14 @@
 namespace gen {
 
 /** \brief The DomPopulation template, adding functionality dependent on
- * partial (dominance) ordering between candidates to a BasePopulation.
+ * dominance relation between candidates to a BasePopulation. Base class of
+ * NSGAPopulation.
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
 class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
-  using Base2 = internal::PBase<CBase, is_ref, Tag>;
 
 public:
 
@@ -60,20 +60,22 @@ public:
   template<class Ret = typename Base::Ref>
   Ret NOINLINE front(bool parallel = true) const {
 #endif
-    Ret ret{};
     internal::read_lock lock{smp};
     size_t sz = size();
+    // flag whether [i] has been found to be dominated by something
+    // we can safely skip it on the LHS later to save some time
     std::vector<char> dom(sz, 0);
-    #pragma omp parallel for if(parallel)
-    for(size_t i = 0; i < sz; i++) {
+    #pragma omp parallel for if(parallel) schedule(dynamic)
+    for(size_t i = 0; i < sz; i++)
       for(size_t j = 0; j < sz; j++)
         if(!dom[j] && operator[](j) << operator[](i)) {
           dom[i] = 1;
-          break;
+          break; // no omp collapse
         }
+    Ret ret{};
+    for(size_t i = 0; i < sz; i++)
       if(!dom[i])
-        ret.add(operator[](i)); // thread-safe
-    }
+        ret.add(operator[](i));
     return ret;
   }
 

@@ -224,15 +224,43 @@ public:
     return const_iterator{Base::end()};
   }
 
-  /** \brief Read-only access to a specified element (no bounds checking). */
+  /** \brief Read-only access to a specified element by reference (no bounds checking). */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
 
-  /** \brief Read-only access to a specified element (with bounds checking). */
+  /** \brief Read-only access to a specified element by reference (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
+
+  /** \brief Returns a specified element by value (with bounds checking) */
+  Candidate<CBase> at_v(size_t pos) const {
+    return static_cast<const Candidate<CBase>>(Base::at(pos));
+  }
+
+protected:
+
+#ifndef DOXYGEN
+  /* Used for iterating directly over std::vector<CandidateTagged>. */
+  Base& as_vec() {
+    return static_cast<Base&>(*this);
+  }
+
+  const Base& as_vec() const {
+    return static_cast<const Base&>(*this);
+  }
+
+  const Candidate<CBase>& first() {
+    return Base::front();
+  }
+
+  const Candidate<CBase>& last() {
+    return Base::back();
+  }
+#endif
+
+public:
 
   /** \brief Adds a new candidate. */
   void add(const Candidate<CBase>& c) {
@@ -363,31 +391,26 @@ public:
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all candidates satisfying the predicate are
    * removed.
-   * \param randomize whether to randomly shuffle the sample prior to pruning
-   * (this is the default). If \b false then earlier appearing candidates are
-   * preferred in survival.
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&),
-      size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+  void NOINLINE prune(bool (*test)(const Candidate<CBase>&),
+      size_t minSize = 0, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
-    if(randomize)
-      shuffle(rng);
     size_t sz = size();
-    for(size_t i = 0; i < sz - 1; i++)
-      if(test(operator[](i))) {
-        Base::erase(Base::begin() + i);
-        if(--sz <= minSize)
-          return;
-      }
+    for(size_t i = 0; i < sz; )
+      if(test(operator[](i)))
+        std::swap(Base::operator[](i), Base::operator[](--sz));
+      else
+        i++;
+    Base::erase(Base::begin() + sz, Base::end());
   }
 
   /** \brief Reduces the population by selective removal of candidates.
    *
-   * Candidates are tested for similarity according to a provided crierion
+   * Candidates are tested for similarity according to a provided criterion
    * function. If a pair of candidates (\b a, \b b) satisfies the test, only
    * \b a is kept. A minimum number of candidates can be set; if so, the
    * procedure stops when enough candidates have been removed to satisfy this
@@ -405,7 +428,7 @@ public:
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
-  void prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
+  void NOINLINE prune(bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
       size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
@@ -413,13 +436,16 @@ public:
     if(randomize)
       shuffle(rng);
     size_t sz = size();
-    for(size_t i = 0; i < sz - 1; i++)
-      for(size_t j = sz - 1; j > i; j--)
-        if(test(operator[](i), operator[](j))) {
-          Base::erase(Base::begin() + j);
-          if(--sz <= minSize)
-            return;
-        }
+    for(size_t i = 0; i < sz - 1; i++) {
+      const Candidate<CBase>& op1 = operator[](i);
+      for(size_t j = i + 1; j < sz; ) {
+        if(test(op1, operator[](j)))
+          std::swap(Base::operator[](j), Base::operator[](--sz));
+        else
+          j++;
+      }
+    }
+    Base::erase(Base::begin() + sz, Base::end());
   }
 
   /** \brief Retrieves a candidate chosen using uniform random selection.
