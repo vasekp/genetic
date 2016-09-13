@@ -45,7 +45,7 @@ public:
   Ref front(bool parallel = true) const {
 #else
   template<class Ret = typename Base::Ref>
-  Ret NOINLINE front(bool parallel = true) const {
+  NOINLINE Ret front(bool parallel = true) const {
 #endif
     {
       internal::read_lock lock{smp};
@@ -155,7 +155,7 @@ private:
     }
   };
 
-  void NOINLINE nsga_rate(bool parallel = false) {
+  NOINLINE void nsga_rate(bool parallel = false) {
     std::vector<nsga_struct> vec{};
     std::vector<nsga_struct*> ref{};
     size_t sz = size();
@@ -208,7 +208,7 @@ private:
   }
 
   template<class Ret, double (*fun)(double, double), class Rng>
-  Ret NOINLINE NSGASelect_int(double bias, Rng& rng) {
+  NOINLINE Ret NSGASelect_int(double bias, Rng& rng) {
     internal::read_lock lock{smp};
     size_t sz = size();
     if(sz == 0)

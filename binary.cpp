@@ -118,7 +118,7 @@ class Gene {
       : src;
   }
 
-  friend std::ostream& NOINLINE operator<< (std::ostream& os, const Gene& g) {
+  friend std::ostream& operator<< (std::ostream& os, const Gene& g) {
     os << g.tgt+1;
     auto c = g.ctrl;
     if(c != 0) {
@@ -145,7 +145,7 @@ class Candidate {
 
   Candidate(std::vector<Gene>&& _gt): gt(std::move(_gt)) { }
 
-  float NOINLINE fitness() const {
+  NOINLINE float fitness() const {
     register unsigned work;
     unsigned cmp;
     unsigned mism = 0;
@@ -236,7 +236,7 @@ class CandidateFactory {
     return Candidate{std::move(gt)};
   }
 
-  Candidate NOINLINE getNew() {
+  NOINLINE Candidate getNew() {
     int index = dFun(gen::rng);
     Candidate c = (this->*func[index].first)();
     c.setOrigin(index);
