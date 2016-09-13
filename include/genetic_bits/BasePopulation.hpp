@@ -204,7 +204,12 @@ public:
     Base::reserve(count);
   }
 
-  /** \brief Returns an iterator to the beginning. */
+  /** \brief Returns an iterator to the beginning.
+   *
+   * Note that using iterators to access the individual candidates in a
+   * Population circumvents the memory locking mechanisms. In any case
+   * references to members of a population are invalidated, so are any
+   * currently stored iterators. */
   iterator begin() {
     return iterator{Base::begin()};
   }
@@ -214,7 +219,8 @@ public:
     return iterator{Base::end()};
   }
 
-  /** \brief Returns a constant iterator to the beginning. */
+  /** \brief Returns a constant iterator to the beginning.
+   * \copydetails begin() */
   const_iterator begin() const {
     return const_iterator{Base::begin()};
   }
