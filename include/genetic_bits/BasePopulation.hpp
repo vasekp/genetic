@@ -400,12 +400,12 @@ public:
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
     size_t sz = size();
-    typedef decltype(Base::front()) reference;
-    auto new_end = std::remove_if(Base::begin(), Base::end(),
-        [&](reference& op) {
-          return test(static_cast<const Candidate<CBase>&>(op)) && --sz >= minSize;
-        });
-    Base::erase(new_end, Base::end());
+    for(size_t i = 0; i < sz; )
+      if(test(operator[](i)))
+        std::swap(Base::operator[](i), Base::operator[](--sz));
+      else
+        i++;
+    Base::erase(Base::begin() + sz, Base::end());
   }
 
   /** \brief Reduces the population by selective removal of candidates.
@@ -436,16 +436,16 @@ public:
     if(randomize)
       shuffle(rng);
     size_t sz = size();
-    typedef decltype(Base::front()) reference;
-    auto new_end = Base::end();
     for(size_t i = 0; i < sz - 1; i++) {
       const Candidate<CBase>& op1 = operator[](i);
-      new_end = std::remove_if(Base::begin() + i + 1, new_end,
-          [&](reference& op2) {
-            return test(op1, static_cast<const Candidate<CBase>&>(op2)) && --sz >= minSize;
-          });
+      for(size_t j = i + 1; j < sz; ) {
+        if(test(op1, operator[](j)))
+          std::swap(Base::operator[](j), Base::operator[](--sz));
+        else
+          j++;
+      }
     }
-    Base::erase(new_end, Base::end());
+    Base::erase(Base::begin() + sz, Base::end());
   }
 
   /** \brief Retrieves a candidate chosen using uniform random selection.

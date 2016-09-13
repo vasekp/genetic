@@ -61,6 +61,8 @@ public:
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
+    // flag whether [i] has been found to be dominated by something
+    // we can safely skip it on the LHS later to save some time
     std::vector<char> dom(sz, 0);
     #pragma omp parallel for if(parallel) schedule(dynamic)
     for(size_t i = 0; i < sz; i++)

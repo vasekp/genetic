@@ -139,13 +139,20 @@ public:
 private:
 
   struct nsga_struct {
-    const Candidate<CBase>& rCand;    // reference to a candidate
-    size_t& rRank;       // reference to its tag in the original population
-    size_t dom_cnt;      // number of candidates dominating this
-    std::vector<nsga_struct*> dom;    // candidates dominated by this
+    internal::CandidateTagged<CBase, is_ref, size_t>& rCT;
+    size_t dom_cnt;                 // number of candidates dominating this
+    std::vector<nsga_struct*> dom;  // candidates dominated by this
 
-    nsga_struct(const Candidate<CBase>& rCand_, size_t& rRank_):
-      rCand(rCand_), rRank(rRank_), dom_cnt(0), dom{} { };
+    nsga_struct(internal::CandidateTagged<CBase, is_ref, size_t>& ref):
+      rCT(ref), dom_cnt(0), dom{} { };
+
+    const Candidate<CBase>& rCand() {
+      return static_cast<const Candidate<CBase>&>(rCT);
+    }
+
+    size_t& rRank() {
+      return rCT.tag();
+    }
   };
 
   void NOINLINE nsga_rate(bool parallel = false) {
@@ -153,14 +160,15 @@ private:
     std::vector<nsga_struct*> ref{};
     size_t sz = size();
     /* vec: size() preallocated nsga_structs, each pointing to one Candidate
-     * ref: size() pointers to vec, originally 1:1 in order */
+     * ref: size() pointers to vec, originally 1:1 in order
+     * Other ways tried:
+     * - std::unique_ptr<nsga_struct>: unnecessary individual allocation
+     * - list embedded in a vector: slow due to special cases
+     * - validity flag: slow */
     vec.reserve(sz);
     ref.reserve(sz);
     for(auto& tg : Base::as_vec()) {
-      vec.push_back({
-        static_cast<const Candidate<CBase>&>(tg),
-        tg.tag()
-      });
+      vec.push_back({tg});
       ref.push_back(&vec.back());
     }
     /* Calculate dominance counts and lists of dominated candidates */
@@ -168,7 +176,7 @@ private:
     for(size_t i = 0; i < sz; i++) {
       nsga_struct& op1 = vec[i];
       for(nsga_struct& op2 : vec)
-        if(op1.rCand << op2.rCand) {
+        if(op1.rCand() << op2.rCand()) {
           op1.dom.push_back(&op2);
           #pragma omp atomic
           op2.dom_cnt++;
@@ -178,24 +186,22 @@ private:
      * empty, we're done. */
     size_t cur_rank = 0;
     std::vector<nsga_struct> cur_front{};
-    while(ref.size() > 0) {
+    auto first = ref.begin();
+    auto last = ref.end();
+    while(first != last) {
       cur_front.clear();
-      for(auto& ps : ref)
-        if(ps->dom_cnt == 0) {
-          cur_front.push_back(std::move(*ps));
-          ps->dom_cnt = 0;
-        }
-      {
-        auto new_end = std::remove_if(ref.begin(), ref.end(),
-            [](const nsga_struct* ps) -> bool { return ps->dom_cnt == 0; });
-        ref.erase(new_end, ref.end());
-      }
+      for(auto it = first; it != last; )
+        if((*it)->dom_cnt == 0) {
+          cur_front.push_back(std::move(**it));
+          std::swap(*it, *(--last));
+        } else
+          it++;
       /* Break arrows from members of cur_front and assign final rank to
        * them */
       for(auto& r : cur_front) {
         for(auto pdom : r.dom)
           pdom->dom_cnt--;
-        r.rRank = cur_rank;
+        r.rRank() = cur_rank;
       }
       cur_rank++;
     }
