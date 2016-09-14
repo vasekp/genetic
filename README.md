@@ -16,8 +16,9 @@ OpenMP 2.5 support is required to compile the code without warnings and to use
 the multithreading optimizations. GCC 4 and above are compliant with the 
 specification.
 
-Finally, all documentation is provided via [Doxygen][1] markup. Install 
-Doxygen to make this accessible via `make doc`.
+Finally, the latest documentation is provided via [Doxygen][1] markup. 
+Install Doxygen to make this accessible via `make doc`. (This step is 
+optional, the documentation is also available [online][2].)
 
 
 ## Getting started
@@ -47,7 +48,8 @@ multiprocessor support, and `-O3` for proper performance.
 
 All the functionality is described in the Doxygen documentation embedded in 
 the header files. Use `make doc` to extract HTML with hyperlinks into the 
-`doc` directory.
+`doc` directory. Alternatively, the documentation of the latest release 
+version can be accessed online [here][2].
 
 Some examples are provided in the `examples` directory. Use `make examples` to 
 see them in action.
@@ -97,3 +99,4 @@ Destroying a **gen::Population** while read from or written to results in
 a call to **std::terminate()**.
 
 [1]: http://www.doxygen.org/index.html
+[2]: https://vasekp.github.io/genetic/doc/index.html
