@@ -1,12 +1,10 @@
 export HEADERS = include/genetic.hpp include/genetic_bits/*.hpp
 
-all:	doc examples
+examples:
+	make -C examples
 
 doc:	$(HEADERS) Doxyfile README.md
 	doxygen Doxyfile
-
-examples:
-	make -C examples
 
 clean:
 	rm -r doc
