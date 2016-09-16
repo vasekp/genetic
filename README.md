@@ -90,10 +90,9 @@ following functionality is not guarded by memory locks and must be protected
 by proper program logic:
 1. Copying, moving, and assigning of entire **gen::Population** objects
 2. Reading from **gen::Population** as a container, namely using 
-   **gen::BasePopulation::begin()**, **gen::BasePopulation::end()**, 
-   **gen::BasePopulation::add(const Container&)**, and range-based 
-   **for**-loops.
+   iterators, range-based **for**-loops, or
+   **gen::BasePopulation::add(const Container&)**.
 Destroying a **gen::Population** while read from or written to results in 
-a call to **std::terminate()**.
+a **std::logic_error** being thrown.
 
 [1]: http://www.doxygen.org/index.html
