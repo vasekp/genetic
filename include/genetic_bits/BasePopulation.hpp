@@ -462,41 +462,38 @@ public:
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use \link randomSelect_v(Rng&) const randomSelect_v(Rng&)
-   * \endlink instead.
+   * allows this, use randomSelect_v(Rng&) instead.
    *
    * \returns a constant reference to a randomly chosen candidate.
    *
    * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
-  const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
+  const Candidate<CBase>& randomSelect(Rng& rng = rng) {
     internal::read_lock lock{smp};
     return randomSelect_conv<const Candidate<CBase>&, Rng>(rng, lock);
   }
 
-  /** \copybrief randomSelect(Rng&) const
+  /** \copybrief randomSelect(Rng&)
    *
-   * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
-   * returns by value.
+   * Works like randomSelect(Rng&) but returns by value.
    *
    * \returns a copy of the randomly chosen candidate.
    *
    * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
-  Candidate<CBase> randomSelect_v(Rng& rng = rng) const {
+  Candidate<CBase> randomSelect_v(Rng& rng = rng) {
     internal::read_lock lock{smp};
     return randomSelect_conv<Candidate<CBase>, Rng>(rng, lock);
   }
 
-  /** \copybrief randomSelect(Rng&) const
+  /** \copybrief randomSelect(Rng&)
    *
-   * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
-   * returns an iterator.
+   * Works like randomSelect(Rng&) but returns an iterator.
    *
    * \returns an iterator pointing to the randomly selected candidate, end()
    * if the population is empty. */
   template<class Rng = decltype(rng)>
-  const_iterator randomSelect_i(Rng& rng = rng) const {
+  iterator randomSelect_i(Rng& rng = rng) {
     internal::read_lock lock{smp};
     return randomSelect_int(rng, lock);
   }
@@ -504,7 +501,7 @@ public:
 private:
 
   template<class Rng>
-  const_iterator randomSelect_int(Rng& rng, internal::rw_lock&) const {
+  iterator randomSelect_int(Rng& rng, internal::rw_lock&) {
     size_t sz = size();
     if(sz == 0)
       return end();
@@ -513,8 +510,8 @@ private:
   }
 
   template<class Ret, class Rng>
-  Ret randomSelect_conv(Rng& rng, internal::rw_lock& lock) const {
-    const_iterator it = randomSelect_int(rng, lock);
+  Ret randomSelect_conv(Rng& rng, internal::rw_lock& lock) {
+    iterator it = randomSelect_int(rng, lock);
     if(it == end())
       throw std::out_of_range("randomSelect(): Population is empty.");
     else
@@ -529,15 +526,14 @@ public:
    * The returned \link Ref \endlink remains valid until the original
    * population is modified.  Therefore there is a risk of invalidating it in
    * a multi-threaded program if another thread concurrently modifies the
-   * population. If your code allows this, use \link
-   * randomSelect_v(size_t, Rng&) const randomSelect_v(size_t, Rng&) \endlink
+   * population. If your code allows this, use randomSelect_v(size_t, Rng&)
    * instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  Ref randomSelect(size_t k, Rng& rng = rng) const {
+  Ref randomSelect(size_t k, Rng& rng = rng) {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
-  NOINLINE Ret randomSelect(size_t k, Rng& rng = rng) const {
+  NOINLINE Ret randomSelect(size_t k, Rng& rng = rng) {
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
@@ -558,12 +554,12 @@ public:
     return ret;
   }
 
-  /** \copybrief randomSelect(size_t, Rng&) const
+  /** \copybrief randomSelect(size_t, Rng&)
    *
-   * Works like \link randomSelect(size_t, Rng&) const randomSelect(size_t,
-   * Rng&) \endlink but returns an independent population. */
+   * Works like randomSelect(size_t, Rng&) but returns an independent
+   * population. */
   template<class Rng = decltype(rng)>
-  Val randomSelect_v(size_t k, Rng& rng = rng) const {
+  Val randomSelect_v(size_t k, Rng& rng = rng) {
     return randomSelect<Val>(k, rng);
   }
 
