@@ -1,4 +1,4 @@
-export HEADERS = include/genetic.hpp include/genetic_bits/*.hpp
+HEADERS = include/genetic.hpp include/genetic_bits/*.hpp
 
 all:	doc examples
 
