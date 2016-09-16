@@ -35,6 +35,10 @@ using PopulationChooser = typename std::conditional<
  * - BasePopulation in all other cases (this is the subclass of the above
  *   three).
  *
+ * Note that the existence of \b operator<() is checked first, so if both of
+ * the operators are defined, \b operator<<() is ignored and the methods made
+ * accessible in DomPopulation are not defined.
+ *
  * A Population can be used as a container of <b>Candidate</b>s with read-only
  * access. (See Candidate for discussion about the relation between a
  * Candidate and \b CBase.) The functions \link BasePopulation::begin()
