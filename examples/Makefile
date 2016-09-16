@@ -1,5 +1,5 @@
 PROGS = regex binary binary-mo
-HEADERS := $(addprefix ../,$(HEADERS))
+HEADERS = ../include/genetic.hpp ../include/genetic_bits/*.hpp
 
 # This allows to distinguish between binaries made for debug, profiling, etc.
 # The main purpose is that "make debug" doesn't think there's nothing to make 
