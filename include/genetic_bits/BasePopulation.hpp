@@ -27,12 +27,12 @@ class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
 
   using Base = internal::PBase<CBase, is_ref, Tag>;
 
-  using iterator = internal::CTIterator<typename Base::iterator>;
-  using const_iterator = internal::CTIterator<typename Base::const_iterator>;
-
 protected:
 
 #ifndef DOXYGEN
+  using iterator = internal::CTIterator<typename Base::iterator>;
+  using const_iterator = internal::CTIterator<typename Base::const_iterator>;
+
   mutable internal::rw_semaphore smp{};
 #endif
 
@@ -463,30 +463,65 @@ public:
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
    * allows this, use \link randomSelect_v(Rng&) const randomSelect_v(Rng&)
-   * \endlink instead. */
-#ifdef DOXYGEN
+   * \endlink instead.
+   *
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
   const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
-#else
-  template<class Rng = decltype(rng), class Ret = const Candidate<CBase>&>
-  Ret randomSelect(Rng& rng = rng) const {
-#endif
     internal::read_lock lock{smp};
-    size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("randomSelect(): Population is empty.");
-    std::uniform_int_distribution<size_t> dist{0, sz - 1};
-    return operator[](dist(rng));
+    return randomSelect_conv<const Candidate<CBase>&, Rng>(rng, lock);
   }
 
   /** \copybrief randomSelect(Rng&) const
    *
    * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
-   * returns by value. */
+   * returns by value.
+   *
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
   Candidate<CBase> randomSelect_v(Rng& rng = rng) const {
-    return randomSelect<Candidate<CBase>>(rng);
+    internal::read_lock lock{smp};
+    return randomSelect_conv<Candidate<CBase>, Rng>(rng, lock);
   }
+
+  /** \copybrief randomSelect(Rng&) const
+   *
+   * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
+   * returns an iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<class Rng = decltype(rng)>
+  const_iterator randomSelect_i(Rng& rng = rng) const {
+    internal::read_lock lock{smp};
+    return randomSelect_int(rng, lock);
+  }
+
+private:
+
+  template<class Rng>
+  const_iterator randomSelect_int(Rng& rng, internal::rw_lock&) const {
+    size_t sz = size();
+    if(sz == 0)
+      return end();
+    std::uniform_int_distribution<size_t> dist{0, sz - 1};
+    return begin() + dist(rng);
+  }
+
+  template<class Ret, class Rng>
+  Ret randomSelect_conv(Rng& rng, internal::rw_lock& lock) const {
+    const_iterator it = randomSelect_int(rng, lock);
+    if(it == end())
+      throw std::out_of_range("randomSelect(): Population is empty.");
+    else
+      return static_cast<Ret>(*it);
+  }
+
+public:
 
   /** \brief Randomly selects \b k different candidates. If <b>k ≥ size()</b>,
    * the entire population is returned.

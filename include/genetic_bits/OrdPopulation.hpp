@@ -28,6 +28,7 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
+  using typename Base::iterator;
 
   /** \brief Creates an empty population. */
   OrdPopulation() = default;
@@ -51,28 +52,60 @@ public:
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use best_v() instead. */
-#ifdef DOXYGEN
+   * allows this, use best_v() instead.
+   *
+   * \returns a constant reference to the best-of-population.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   const Candidate<CBase>& best() {
-#else
-  template<class Ret = const Candidate<CBase>&>
-  Ret best() {
-#endif
     internal::read_lock lock{smp};
-    if(this->empty())
-      throw std::out_of_range("best(): Population is empty.");
-    if(is_sorted(lock))
-      return Base::first();
-    else
-      return *std::min_element(begin(), end());
+    return best_conv<const Candidate<CBase>&>(lock);
   }
 
   /** \copybrief best()
    *
-   * Works like best() but returns by value. */
+   * Works like best() but returns by value.
+   *
+   * \returns a copy of the best-of-population.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   Candidate<CBase> best_v() {
-    return best<Candidate<CBase>>();
+    internal::read_lock lock{smp};
+    return best_conv<Candidate<CBase>>(lock);
   }
+
+  /** \copybrief best()
+   *
+   * Works like best() but returns an iterator.
+   *
+   * \returns an iterator pointing to the best-of-population, end() if the
+   * population is empty. */
+  iterator best_i() {
+    internal::read_lock lock{smp};
+    return best_int(lock);
+  }
+
+private:
+
+  iterator best_int(internal::rw_lock& lock) {
+    if(Base::empty())
+      return end();
+    else if(is_sorted(lock))
+      return {begin()};
+    else
+      return {std::min_element(begin(), end())};
+  }
+
+  template<class Ret>
+  Ret best_conv(internal::rw_lock& lock) {
+    iterator it = best_int(lock);
+    if(it == end())
+      throw std::out_of_range("best(): Population is empty.");
+    else
+      return static_cast<Ret>(*it);
+  }
+
+public:
 
 #ifdef DOXYGEN
 
@@ -108,7 +141,9 @@ public:
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    *
-   * \returns a constant reference to a randomly chosen candidate. */
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng);
 
@@ -116,69 +151,101 @@ public:
    *
    * Works like rankSelect() but returns by value.
    *
-   * \returns a copy of the randomly chosen candidate. */
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng);
+
+  /** \copybrief rankSelect()
+   *
+   * Works like rankSelect() but returns an iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<class Rng = decltype(rng)>
+  iterator rankSelect_i(Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double max, Rng& rng = rng) {
+    internal::read_lock lock{smp};
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const Candidate<CBase>&>(max, rng);
+      return rankSelect_exp_conv<const Candidate<CBase>&>(max, rng, lock);
     else
-      return rankSelect_two<
+      return rankSelect_two_conv<
         const Candidate<CBase>&,
         &internal::eval_in_product<fun>
-      >(max, rng);
+      >(max, rng, lock);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng) {
-    return rankSelect_two<const Candidate<CBase>&, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return rankSelect_two_conv<const Candidate<CBase>&, fun>(bias, rng, lock);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
+    internal::read_lock lock{smp};
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<Candidate<CBase>>(bias, rng);
+      return rankSelect_exp_conv<Candidate<CBase>>(bias, rng, lock);
     else
-      return rankSelect_two<
+      return rankSelect_two_conv<
         Candidate<CBase>,
         &internal::eval_in_product<fun>
-      >(bias, rng);
+      >(bias, rng, lock);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
-    return rankSelect_two<Candidate<CBase>, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return rankSelect_two_conv<Candidate<CBase>, fun>(bias, rng, lock);
+  }
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  iterator rankSelect_i(double bias, Rng& rng = rng) {
+    internal::read_lock lock{smp};
+    if(internal::is_exp<fun>::value)
+      return rankSelect_exp_int<Candidate<CBase>>(bias, rng, lock);
+    else
+      return rankSelect_two_int<
+        &internal::eval_in_product<fun>
+      >(bias, rng, lock);
+  }
+
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  iterator rankSelect_i(double bias, Rng& rng = rng) {
+    internal::read_lock lock{smp};
+    return rankSelect_two_int<fun>(bias, rng, lock);
   }
 
 #endif
 
 private:
 
-  template<class Ret, class Rng>
-  NOINLINE Ret rankSelect_exp(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<class Rng>
+  NOINLINE iterator rankSelect_exp_int(double bias, Rng& rng,
+      internal::rw_lock& lock) {
     double x = uniform(rng);
     size_t sz = size();
     if(sz == 0)
-      throw std::out_of_range("rankSelect(): Population is empty.");
+      return end();
     ensure_sorted(lock);
     // Bug in GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63176
     if(x == 1)
-      return Base::last();
+      return end() - 1;
     else
-      return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
+      return begin() + ((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
-  template<class Ret, double (*fun)(double, double), class Rng>
-  NOINLINE Ret rankSelect_two(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<double (*fun)(double, double), class Rng>
+  NOINLINE iterator rankSelect_two_int(double bias, Rng& rng,
+      internal::rw_lock& lock) {
     size_t sz = size();
     if(sz == 0)
-      throw std::out_of_range("rankSelect(): Population is empty.");
+      return end();
     internal::read_lock sort_lock{sort_smp};
     if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
       sort_lock.upgrade();
@@ -192,7 +259,27 @@ private:
       rankSelect_last_bias = bias;
     }
     ensure_sorted(lock);
-    return operator[](rankSelect_dist(rng));
+    return begin() + rankSelect_dist(rng);
+  }
+
+  template<class Ret, class Rng>
+  NOINLINE Ret rankSelect_exp_conv(double bias, Rng& rng,
+      internal::rw_lock& lock) {
+    iterator it = rankSelect_exp_int(bias, rng, lock);
+    if(it == end())
+      throw std::out_of_range("rankSelect(): Population is empty.");
+    else
+      return static_cast<Ret>(*it);
+  }
+
+  template<class Ret, double (*fun)(double, double), class Rng>
+  NOINLINE Ret rankSelect_two_conv(double bias, Rng& rng,
+      internal::rw_lock& lock) {
+    iterator it = rankSelect_two_int<fun>(bias, rng, lock);
+    if(it == end())
+      throw std::out_of_range("rankSelect(): Population is empty.");
+    else
+      return static_cast<Ret>(*it);
   }
 
 public:
