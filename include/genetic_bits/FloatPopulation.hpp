@@ -92,42 +92,41 @@ public:
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double mult, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return fitnessSelect_conv<
-      const Candidate<CBase>&,
+    return *fitnessSelect_int<
       &internal::eval_in_product<fun>
-    >(mult, rng, lock);
+    >(mult, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return fitnessSelect_conv<const Candidate<CBase>&, fun>(bias, rng, lock);
+    return *fitnessSelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return fitnessSelect_conv<
-      Candidate<CBase>,
+    return *fitnessSelect_int<
       &internal::eval_in_product<fun>
-    >(bias, rng, lock);
+    >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return fitnessSelect_conv<Candidate<CBase>, fun>(bias, rng, lock);
+    return *fitnessSelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
-    return fitnessSelect_int<&internal::eval_in_product<fun>>(
-        bias, rng, lock.get());
+    return fitnessSelect_int<
+      &internal::eval_in_product<fun>
+    >(bias, rng, lock.get(), false);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
-    return fitnessSelect_int<fun>(bias, rng, lock.get());
+    return fitnessSelect_int<fun>(bias, rng, lock.get(), false);
   }
 
 #endif
@@ -135,10 +134,15 @@ public:
 private:
 
   template<double (*fun)(double, double), class Rng>
-  NOINLINE iterator fitnessSelect_int(double bias, Rng& rng, internal::rw_lock&) {
+  NOINLINE iterator fitnessSelect_int(double bias, Rng& rng,
+      internal::rw_lock&, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      return end();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("fitnessSelect(): Population is empty.");
+      else
+        return end();
+    }
     internal::read_lock fit_lock{fit_smp};
     if(fitnessSelect_last_mod != smp.get_mod_cnt()
        || bias != fitnessSelect_last_bias) {
@@ -153,14 +157,6 @@ private:
       fitnessSelect_last_bias = bias;
     }
     return begin() + fitnessSelect_dist(rng);
-  }
-
-  template<class Ret, double (*fun)(double, double), class Rng>
-  Ret fitnessSelect_conv(double bias, Rng& rng, internal::rw_lock& lock) {
-    iterator it = fitnessSelect_int(bias, rng, lock);
-    if(it == end())
-      throw std::out_of_range("fitnessSelect(): Population is empty.");
-    else return static_cast<Ret>(*it);
   }
 
 public:

@@ -478,7 +478,7 @@ public:
   template<class Rng = decltype(rng)>
   const Candidate<CBase>& randomSelect(Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return randomSelect_conv<const Candidate<CBase>&, Rng>(rng, lock);
+    return *randomSelect_int(rng, lock, true);
   }
 
   /** \copybrief randomSelect(Rng&)
@@ -491,7 +491,7 @@ public:
   template<class Rng = decltype(rng)>
   Candidate<CBase> randomSelect_v(Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return randomSelect_conv<Candidate<CBase>, Rng>(rng, lock);
+    return *randomSelect_int(rng, lock, true);
   }
 
   /** \copybrief randomSelect(Rng&)
@@ -506,27 +506,22 @@ public:
    * if the population is empty. */
   template<class Rng = decltype(rng)>
   iterator randomSelect_i(PopulationLock& lock, Rng& rng = rng) {
-    return randomSelect_int(rng, lock.get());
+    return randomSelect_int(rng, lock.get(), false);
   }
 
 private:
 
   template<class Rng>
-  iterator randomSelect_int(Rng& rng, internal::rw_lock&) {
+  iterator randomSelect_int(Rng& rng, internal::rw_lock&, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      return end();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("randomSelect(): Population is empty.");
+      else
+        return end();
+    }
     std::uniform_int_distribution<size_t> dist{0, sz - 1};
     return begin() + dist(rng);
-  }
-
-  template<class Ret, class Rng>
-  Ret randomSelect_conv(Rng& rng, internal::rw_lock& lock) {
-    iterator it = randomSelect_int(rng, lock);
-    if(it == end())
-      throw std::out_of_range("randomSelect(): Population is empty.");
-    else
-      return static_cast<Ret>(*it);
   }
 
 public:

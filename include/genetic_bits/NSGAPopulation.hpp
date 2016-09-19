@@ -129,41 +129,41 @@ public:
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double mult, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return NSGASelect_conv<
-      const Candidate<CBase>&,
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(mult, rng, lock);
+    >(mult, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return NSGASelect_conv<const Candidate<CBase>&, fun>(bias, rng, lock);
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return NSGASelect_conv<
-      Candidate<CBase>,
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(bias, rng, lock);
+    >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
     internal::read_lock lock{smp};
-    return NSGASelect_conv<Candidate<CBase>, fun>(bias, rng, lock);
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
-    return NSGASelect_int<&internal::eval_in_product<fun>>(bias, rng, lock);
+    return NSGASelect_int<
+      &internal::eval_in_product<fun>
+    >(bias, rng, lock, false);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
-    return NSGASelect_int<fun>(bias, rng, lock);
+    return NSGASelect_int<fun>(bias, rng, lock, false);
   }
 
 #endif
@@ -240,10 +240,15 @@ private:
   }
 
   template<double (*fun)(double, double), class Rng>
-  NOINLINE iterator NSGASelect_int(double bias, Rng& rng, internal::rw_lock&) {
+  NOINLINE iterator NSGASelect_int(double bias, Rng& rng,
+      internal::rw_lock&, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      return end();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("NSGASelect(): Population is empty.");
+      else
+        return end();
+    }
     internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
       nsga_lock.upgrade();
@@ -259,14 +264,6 @@ private:
       nsga_last_bias = bias;
     }
     return begin() + nsga_dist(rng);
-  }
-
-  template<class Ret, double (*fun)(double, double), class Rng>
-  Ret NSGASelect_conv(double bias, Rng& rng, internal::rw_lock& lock) {
-    iterator it = NSGASelect_int<fun>(bias, rng, lock);
-    if(it == end())
-      throw std::out_of_range("NSGASelect(): Population is empty.");
-    else return static_cast<Ret>(*it);
   }
 
 public:
