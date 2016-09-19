@@ -36,6 +36,7 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
+  using typename Base::iterator;
 
   /** \brief Creates an empty population. */
   NSGAPopulation() = default;
@@ -94,7 +95,9 @@ public:
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    *
-   * \returns a constant reference to a randomly chosen candidate. */
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng);
 
@@ -102,36 +105,65 @@ public:
    *
    * Works like NSGASelect() but returns by value.
    *
-   * \returns a copy of the randomly chosen candidate. */
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng);
+
+  /** \copybrief NSGASelect()
+   *
+   * Works like NSGASelect() but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double mult, Rng& rng = rng) {
-    return NSGASelect_int<
-      const Candidate<CBase>&,
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(mult, rng);
+    >(mult, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng) {
-    return NSGASelect_int<const Candidate<CBase>&, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<
-      Candidate<CBase>,
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(bias, rng);
+    >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<Candidate<CBase>, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
+  }
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return NSGASelect_int<
+      &internal::eval_in_product<fun>
+    >(bias, rng, lock, false);
+  }
+
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return NSGASelect_int<fun>(bias, rng, lock, false);
   }
 
 #endif
@@ -207,12 +239,16 @@ private:
     }
   }
 
-  template<class Ret, double (*fun)(double, double), class Rng>
-  NOINLINE Ret NSGASelect_int(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<double (*fun)(double, double), class Rng>
+  NOINLINE iterator NSGASelect_int(double bias, Rng& rng,
+      internal::rw_lock&, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("NSGASelect(): Population is empty.");
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("NSGASelect(): Population is empty.");
+      else
+        return end();
+    }
     internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
       nsga_lock.upgrade();
@@ -227,8 +263,7 @@ private:
       nsga_last_mod = smp.get_mod_cnt();
       nsga_last_bias = bias;
     }
-    size_t ix = nsga_dist(rng);
-    return operator[](ix);
+    return begin() + nsga_dist(rng);
   }
 
 public:

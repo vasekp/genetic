@@ -26,6 +26,7 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
+  using typename Base::iterator;
 
   /** \brief Creates an empty population. */
   FloatPopulation() = default;
@@ -57,7 +58,9 @@ public:
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    *
-   * \returns a constant reference to a randomly chosen candidate. */
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng);
 
@@ -65,48 +68,81 @@ public:
    *
    * Works like fitnessSelect() but returns by value.
    *
-   * \returns a copy of the randomly chosen candidate. */
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng);
+  iterator fitnessSelect_v(double bias, Rng& rng = rng);
+
+  /** \copybrief fitnessSelect()
+   *
+   * Works like fitnessSelect() but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double mult, Rng& rng = rng) {
-    return fitnessSelect_int<
-      const Candidate<CBase>&,
+    internal::read_lock lock{smp};
+    return *fitnessSelect_int<
       &internal::eval_in_product<fun>
-    >(mult, rng);
+    >(mult, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<const Candidate<CBase>&, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *fitnessSelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<
-      Candidate<CBase>,
+    internal::read_lock lock{smp};
+    return *fitnessSelect_int<
       &internal::eval_in_product<fun>
-    >(bias, rng);
+    >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
-    return fitnessSelect_int<Candidate<CBase>, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *fitnessSelect_int<fun>(bias, rng, lock, true);
+  }
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return fitnessSelect_int<
+      &internal::eval_in_product<fun>
+    >(bias, rng, lock.get(), false);
+  }
+
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return fitnessSelect_int<fun>(bias, rng, lock.get(), false);
   }
 
 #endif
 
 private:
 
-  template<class Ret, double (*fun)(double, double), class Rng>
-  NOINLINE Ret fitnessSelect_int(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<double (*fun)(double, double), class Rng>
+  NOINLINE iterator fitnessSelect_int(double bias, Rng& rng,
+      internal::rw_lock&, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("fitnessSelect(): Population is empty.");
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("fitnessSelect(): Population is empty.");
+      else
+        return end();
+    }
     internal::read_lock fit_lock{fit_smp};
     if(fitnessSelect_last_mod != smp.get_mod_cnt()
        || bias != fitnessSelect_last_bias) {
@@ -120,7 +156,7 @@ private:
       fitnessSelect_last_mod = smp.get_mod_cnt();
       fitnessSelect_last_bias = bias;
     }
-    return operator[](fitnessSelect_dist(rng));
+    return begin() + fitnessSelect_dist(rng);
   }
 
 public:
@@ -134,9 +170,11 @@ public:
   /** \brief Returns the mean fitness of the population and the standard
    * deviation.
    *
-   * \see Stat */
+   * \see Stat
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   NOINLINE Stat stat() const {
-    if(this->empty())
+    if(Base::empty())
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
     internal::read_lock lock{smp};
