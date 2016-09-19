@@ -163,6 +163,14 @@ public:
    * population via a PopulationLock. This lock will guard the validity of the
    * returned iterator.
    *
+   * This function may need to reorder candidates stored in the population.
+   * This will temporarily upgrade the provided lock to a write lock (which
+   * implies waiting for other threads to finish their running read
+   * operations). This operation is guaranteed not to invalidate any iterators
+   * but the contents they refer to changes. Within the calling thread, the
+   * population observably changes if rankSelect_i() needed to sort the
+   * population.
+   *
    * \returns an iterator pointing to the randomly selected candidate, end()
    * if the population is empty. */
   template<class Rng = decltype(rng)>
@@ -302,6 +310,20 @@ public:
   NOINLINE void sort() {
     internal::read_lock lock{smp};
     ensure_sorted(lock);
+  }
+
+  /** \copybrief sort()
+   *
+   * A variant of sort() for use in blocks protected by PopulationLock.
+   *
+   * This function may need to reorder candidates stored in the population.
+   * This will temporarily upgrade the provided lock to a write lock (which
+   * implies waiting for other threads to finish their running read
+   * operations). This operation is guaranteed not to invalidate any iterators
+   * but the contents they refer to changes. Within the calling thread, the
+   * population observably changes if the order needed to be updated. */
+  NOINLINE void sort(PopulationLock& lock) {
+    ensure_sorted(lock.get());
   }
 
 private:

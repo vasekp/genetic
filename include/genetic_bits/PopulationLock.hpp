@@ -12,7 +12,8 @@ class BasePopulation;
  *
  * Use a PopulationLock wherever unguarded direct read access to a population
  * is needed to prevent other threads for modifying it during such section.
- * This could apply to, for example:
+ * (A PopulationLock is not needed if any member functions are called outside
+ * a parallel region.) This could apply to, for example:
  * - copying, copy-assigning, or adding it to another population as a whole,
  * - using the population's iterators \link BasePopulation::begin()
  *   begin()\endlink, \link BasePopulation::end() end()\endlink or
@@ -26,7 +27,7 @@ class BasePopulation;
  * enumeration:
  * ```cpp
  * {
- *   gen::PopulationLock lock(pop); // scope starts here
+ *   gen::PopulationLock lock{pop}; // scope starts here
  *   for(auto& candidate : pop) {
  *     DoSomething(candidate);
  *   }
@@ -36,7 +37,7 @@ class BasePopulation;
  * Standard Template Library with a Population. For example,
  * ```cpp
  * {
- *   gen::PopulationLock lock(pop); // scope starts here
+ *   gen::PopulationLock lock{pop}; // scope starts here
  *   auto iterator = std::find_if(  // STL function
  *     pop.begin(),
  *     pop.end(),
@@ -48,6 +49,8 @@ class BasePopulation;
  *   }
  * } // scope ends, lock automatically released
  * ```
+ * The iterators returned by Population do not allow to modify its contents so
+ * only functions which do not attempt that can be used.
  *
  * **Important:** Most internal Population functions use their own read locks.
  * It is forbidden to call them while holding a PopulationLock as this will
@@ -55,23 +58,30 @@ class BasePopulation;
  * are guaranteed to be exempt from this rule and can be called:
  * - BasePopulation::begin()
  * - BasePopulation::end()
- * - BasePopulation::begin() const
- * - BasePopulation::end() const
  * - BasePopulation::operator[]()
  * - BasePopulation::size() const
  * - any function with a name ending with \b _i.
  *
- * Note that no PopulationLock is needed if any member functions are called
- * outside a parallel region. */
+ * The invariance of the population under a PopulationLock may be broken by an
+ * intentional call to a routine which modifies it in a compatible manner.
+ * Currently this can be \link OrdPopulation::sort(PopulationLock&)
+ * OrdPopulation::sort() \endlink or OrdPopulation::rankSelect_i() (which
+ * calls the former). These functions reorder the members of a population.
+ * They guarantee that no iterators are invalidated, but the candidates the
+ * individual iterators point to after their call can be different than prior
+ * to it. */
 class PopulationLock {
 
   internal::read_lock lock;
 
-public:
-
+#ifndef DOXYGEN
+  /* for access to get() */
   template<class CBase, bool is_ref, class Tag,
     template<class, bool> class Population>
   friend class BasePopulation;
+#endif
+
+public:
 
   /** \brief Locks a given Population for read-only access.
    *
@@ -92,9 +102,11 @@ public:
 
 protected:
 
+#ifndef DOXYGEN
   internal::read_lock& get() {
     return lock;
   }
+#endif
 
 }; // class PopulationLock
 

@@ -209,10 +209,15 @@ public:
 
   /** \brief Returns an iterator to the beginning.
    *
+   * This iterator dereferences to a \link gen::Candidate const
+   * Candidate<CBase>&\endlink.
+   *
    * Note that using iterators to access the individual candidates in a
    * Population circumvents the memory locking mechanisms. In any case
    * references to members of a population are invalidated, so are any
-   * currently stored iterators. */
+   * currently stored iterators.
+   *
+   * \see PopulationLock */
   iterator begin() {
     return iterator{Base::begin()};
   }
@@ -222,16 +227,20 @@ public:
     return iterator{Base::end()};
   }
 
-  /** \brief Returns a constant iterator to the beginning.
-   * \copydetails begin() */
+#ifndef DOXYGEN
+  /* There is no user-observable difference between an iterator and a
+   * const_iterator. Both dereference to a const Candidate&. The difference
+   * arises internally when a Population is moved because iterator can be
+   * turned into a move_iterator and const_iterator can not. */
+
   const_iterator begin() const {
     return const_iterator{Base::begin()};
   }
 
-  /** \brief Returns the constant past-the-end iterator. */
   const_iterator end() const {
     return const_iterator{Base::end()};
   }
+#endif
 
   /** \brief Read-only access to a specified element by reference
    * (no bounds checking).
