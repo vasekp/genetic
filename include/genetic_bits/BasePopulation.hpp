@@ -34,6 +34,9 @@ protected:
 
 #ifndef DOXYGEN
   mutable internal::rw_semaphore smp{};
+
+  /* Allow access to smp */
+  friend class PopulationLock;
 #endif
 
 public:
@@ -184,7 +187,7 @@ public:
 
 #ifdef DOXYGEN
   /** \brief Returns the current count of candidates. */
-  size_t size();
+  size_t size() const;
 #else
   using Base::size;
 #endif
@@ -231,7 +234,10 @@ public:
   }
 
   /** \brief Read-only access to a specified element by reference
-   * (no bounds checking). */
+   * (no bounds checking).
+   *
+   * Does not lock the population for read access. If another thread
+   * simultaneously modifies the population the results are undefined. */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
@@ -239,11 +245,13 @@ public:
   /** \brief Read-only access to a specified element by reference
    * (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
+    internal::read_lock lock{smp};
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
 
   /** \brief Returns a specified element by value (with bounds checking) */
   Candidate<CBase> at_v(size_t pos) const {
+    internal::read_lock lock{smp};
     return static_cast<const Candidate<CBase>>(Base::at(pos));
   }
 

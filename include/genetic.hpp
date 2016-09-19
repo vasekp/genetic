@@ -26,5 +26,6 @@
 #include "genetic_bits/DomPopulation.hpp"
 #include "genetic_bits/NSGAPopulation.hpp"
 #include "genetic_bits/Population.hpp"
+#include "genetic_bits/PopulationLock.hpp"
 
 #endif
