@@ -16,6 +16,7 @@
 #include "genetic_bits/internal.hpp"
 #include "genetic_bits/rw_semaphore.hpp"
 #include "genetic_bits/globals.hpp"
+#include "genetic_bits/PopulationLock.hpp"
 
 #include "genetic_bits/Candidate.hpp"
 #include "genetic_bits/CandidateTagged.hpp"
@@ -26,6 +27,5 @@
 #include "genetic_bits/DomPopulation.hpp"
 #include "genetic_bits/NSGAPopulation.hpp"
 #include "genetic_bits/Population.hpp"
-#include "genetic_bits/PopulationLock.hpp"
 
 #endif

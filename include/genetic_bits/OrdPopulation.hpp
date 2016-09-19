@@ -78,11 +78,14 @@ public:
    *
    * Works like best() but returns an iterator.
    *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
    * \returns an iterator pointing to the best-of-population, end() if the
    * population is empty. */
-  iterator best_i() {
-    internal::read_lock lock{smp};
-    return best_int(lock);
+  iterator best_i(PopulationLock& lock) {
+    return best_int(lock.get());
   }
 
 private:
@@ -161,10 +164,14 @@ public:
    *
    * Works like rankSelect() but returns an iterator.
    *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
    * \returns an iterator pointing to the randomly selected candidate, end()
    * if the population is empty. */
   template<class Rng = decltype(rng)>
-  iterator rankSelect_i(Rng& rng = rng);
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
@@ -205,20 +212,18 @@ public:
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  iterator rankSelect_i(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp_int<Candidate<CBase>>(bias, rng, lock);
+      return rankSelect_exp_int<Candidate<CBase>>(bias, rng, lock.get());
     else
       return rankSelect_two_int<
         &internal::eval_in_product<fun>
-      >(bias, rng, lock);
+      >(bias, rng, lock.get());
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  iterator rankSelect_i(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
-    return rankSelect_two_int<fun>(bias, rng, lock);
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return rankSelect_two_int<fun>(bias, rng, lock.get());
   }
 
 #endif

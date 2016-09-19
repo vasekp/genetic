@@ -498,12 +498,15 @@ public:
    *
    * Works like randomSelect(Rng&) but returns an iterator.
    *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
    * \returns an iterator pointing to the randomly selected candidate, end()
    * if the population is empty. */
   template<class Rng = decltype(rng)>
-  iterator randomSelect_i(Rng& rng = rng) {
-    internal::read_lock lock{smp};
-    return randomSelect_int(rng, lock);
+  iterator randomSelect_i(PopulationLock& lock, Rng& rng = rng) {
+    return randomSelect_int(rng, lock.get());
   }
 
 private:

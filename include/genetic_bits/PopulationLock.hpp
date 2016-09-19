@@ -1,5 +1,12 @@
 namespace gen {
 
+/* Forward declarations */
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+class BasePopulation;
+/* End forward declarations */
+
+
 /** \brief Read-locks a Population for the duration given by the definition
  * scope.
  *
@@ -8,7 +15,10 @@ namespace gen {
  * This could apply to, for example:
  * - copying, copy-assigning, or adding it to another population as a whole,
  * - using the population's iterators \link BasePopulation::begin()
- *   begin()\endlink and \link BasePopulation::end() end()\endlink,
+ *   begin()\endlink, \link BasePopulation::end() end()\endlink or
+ *   iterator-returning functions like \link OrdPopulation::rankSelect_i()
+ *   rankSelect_i()
+ *   \endlink,
  * - range-based for-loops.
  *
  * This mechanism allows to extend the thread-safe internal locking mechanism
@@ -49,6 +59,7 @@ namespace gen {
  * - BasePopulation::end() const
  * - BasePopulation::operator[]()
  * - BasePopulation::size() const
+ * - any function with a name ending with \b _i.
  *
  * Note that no PopulationLock is needed if any member functions are called
  * outside a parallel region. */
@@ -57,6 +68,10 @@ class PopulationLock {
   internal::read_lock lock;
 
 public:
+
+  template<class CBase, bool is_ref, class Tag,
+    template<class, bool> class Population>
+  friend class BasePopulation;
 
   /** \brief Locks a given Population for read-only access.
    *
@@ -74,6 +89,12 @@ public:
     template<class, bool> class Population>
   PopulationLock(BasePopulation<CBase, is_ref, Tag, Population>& pop):
     lock(pop.smp) { }
+
+protected:
+
+  internal::read_lock& get() {
+    return lock;
+  }
 
 }; // class PopulationLock
 

@@ -78,10 +78,14 @@ public:
    *
    * Works like fitnessSelect() but returns an iterator.
    *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
    * \returns an iterator pointing to the randomly selected candidate, end()
    * if the population is empty. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
-  iterator fitnessSelect_i(double bias, Rng& rng = rng);
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
@@ -116,15 +120,14 @@ public:
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
-  iterator fitnessSelect_i(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
-    return fitnessSelect_int<&internal::eval_in_product<fun>>(bias, rng, lock);
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return fitnessSelect_int<&internal::eval_in_product<fun>>(
+        bias, rng, lock.get());
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
-  iterator fitnessSelect_i(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
-    return fitnessSelect_int<fun>(bias, rng, lock);
+  iterator fitnessSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return fitnessSelect_int<fun>(bias, rng, lock.get());
   }
 
 #endif
