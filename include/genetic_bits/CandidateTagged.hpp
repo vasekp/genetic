@@ -58,6 +58,16 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   CandidateTagged(CTBase<CBase, ref>&& c): CTBase<CBase, ref>(std::move(c)) { }
 
+  CandidateTagged& operator=(const gen::Candidate<CBase>& c) {
+    CTBase<CBase, ref>::operator=(c);
+    return *this;
+  }
+
+  CandidateTagged& operator=(CTBase<CBase, ref>&& c) {
+    CTBase<CBase, ref>::operator=(std::move(c));
+    return *this;
+  }
+
   Tag& tag() {
     return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this));
   }
