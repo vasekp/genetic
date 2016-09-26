@@ -351,7 +351,7 @@ public:
    * preceded by a call to sort() or another function guaranteeing a
    * well-defined sorting. */
   ReverseIterable reverse() const {
-    return ReverseIterable(base());
+    return {base()};
   }
 
 private:
