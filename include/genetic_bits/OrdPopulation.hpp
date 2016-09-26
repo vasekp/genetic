@@ -24,10 +24,6 @@ class OrdPopulation {
 
   using iterator = typename Base::iterator;
 
-  /* Protects: last_sort_mod, rankSelect_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore sort_smp{};
-
   size_t last_sort_mod{(size_t)(~0)};
   std::uniform_real_distribution<double> uniform{0, 1};
   std::discrete_distribution<size_t> rankSelect_dist{};
@@ -256,9 +252,8 @@ private:
       else
         return base().end();
     }
-    internal::read_lock sort_lock{sort_smp};
     if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
-      sort_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded over ensure_sorted() later
       rankSelect_probs.clear();
       rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
@@ -326,7 +321,6 @@ public:
 private:
 
   bool is_sorted(const internal::rw_lock&) const {
-    internal::read_lock sort_lock{sort_smp};
     return base().smp.get_mod_cnt() == last_sort_mod;
   }
 

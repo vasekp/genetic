@@ -20,10 +20,6 @@ class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
 
   using iterator = typename Base::iterator;
 
-  /* Protects: fitnessSelect_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore fit_smp{};
-
   std::discrete_distribution<size_t> fitnessSelect_dist{};
   std::vector<double> fitnessSelect_probs{};
   size_t fitnessSelect_last_mod{(size_t)(~0)};
@@ -138,7 +134,7 @@ private:
 
   template<double (*fun)(double, double), class Rng>
   NOINLINE iterator fitnessSelect_int(double bias, Rng& rng,
-      internal::rw_lock&, bool validate) {
+      internal::rw_lock& lock, bool validate) {
     size_t sz = base().size();
     if(sz == 0) {
       if(validate)
@@ -146,10 +142,9 @@ private:
       else
         return base().end();
     }
-    internal::read_lock fit_lock{fit_smp};
     if(fitnessSelect_last_mod != base().smp.get_mod_cnt()
        || bias != fitnessSelect_last_bias) {
-      fit_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded
       fitnessSelect_probs.clear();
       fitnessSelect_probs.reserve(sz);
       for(auto& c : base())

@@ -21,10 +21,6 @@ class NSGAPopulation:
   using Base = BasePopulation<CBase, is_ref, size_t, NSGAPopulation>;
   using Dom = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
 
-  /* Protects: nsga_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore nsga_smp{};
-
   std::discrete_distribution<size_t> nsga_dist{};
   std::vector<double> nsga_probs{};
   size_t nsga_last_mod{(size_t)(~0)};
@@ -52,7 +48,6 @@ public:
 #endif
     {
       internal::read_lock lock{smp};
-      internal::read_lock nsga_lock{nsga_smp};
       if(smp.get_mod_cnt() == nsga_last_mod) {
         Ret ret{};
         for(auto& tg : Base::as_vec())
@@ -243,7 +238,7 @@ private:
 
   template<double (*fun)(double, double), class Rng>
   NOINLINE iterator NSGASelect_int(double bias, Rng& rng,
-      internal::rw_lock&, bool validate) {
+      internal::rw_lock& lock, bool validate) {
     size_t sz = size();
     if(sz == 0) {
       if(validate)
@@ -251,9 +246,8 @@ private:
       else
         return end();
     }
-    internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
-      nsga_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded
       if(smp.get_mod_cnt() != nsga_last_mod)
         nsga_rate(false);
       nsga_probs.clear();
@@ -283,9 +277,8 @@ public:
    * \param parallel controls parallelization using OpenMP (on by default) */
   void precompute(bool parallel = true) {
     internal::read_lock lock{smp};
-    internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod) {
-      nsga_lock.upgrade();
+      lock.upgrade(false);
       nsga_rate(parallel);
       nsga_last_mod = smp.get_mod_cnt();
     }
