@@ -212,7 +212,9 @@ public:
    * If \b count is larger than the actual size of the population, all
    * references may be invalidated. */
   void reserve(size_t count) {
-    internal::write_lock lock{smp};
+    // Does not count as a modification
+    // Invalidates iterators, but they may not be kept between locks anyway.
+    internal::write_lock lock{smp, false};
     Base::reserve(count);
   }
 

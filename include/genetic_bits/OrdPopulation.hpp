@@ -40,17 +40,6 @@ public:
   /** \brief Creates an empty population. */
   OrdPopulation() = default;
 
-  /** \copydoc BasePopulation::reserve */
-  void reserve(size_t count) {
-    base().reserve(count);
-    /* The above command raised smp.mod_cnt by at least 1 but did not disturb
-     * sorting. If our population was sorted we reflect that by manually
-     * incrementing last_sort_mod. If we weren't level before, or if it rose by
-     * more than 1, we won't have is_sorted() afterwards, as intended. */
-    internal::write_lock sort_lock{sort_smp};
-    ++last_sort_mod;
-  }
-
   /** \brief Returns the best candidate of population.
    *
    * If more candidates have equal best fitness the returned reference may be
@@ -296,14 +285,13 @@ public:
           return base().size() > newSize;
         }))
       return;
-    if(base().size() == 0)
-      return;
     ensure_sorted(lock);
+    /* ensureSorted() does this when it actually changes order.  We might have
+     * incremented mod_cnt by the upgrade_lock above, though. Anyway, we are
+     * certainly sorted now. */
+    last_sort_mod = base().smp.get_mod_cnt();
     auto& dummy = base().first(); // see BasePopulation::randomTrim()
     base().as_vec().resize(newSize, dummy);
-    // See reserve()
-    // No sort_lock needed (have write_lock(base().smp))
-    ++last_sort_mod;
   }
 
   /** \brief Sorts the population by fitness for faster response of future
@@ -344,9 +332,8 @@ private:
 
   void ensure_sorted(internal::rw_lock& lock) {
     if(!is_sorted(lock)) {
-      internal::upgrade_lock up{lock};
-      // No one else can be reading or modifying this now (⇐ promise)
-      ++last_sort_mod;
+      // Does not count as a modification (Population is a set)
+      internal::upgrade_lock up{lock, false};
       if(is_sorted(lock))
         return;
       std::sort(base().as_vec().begin(), base().as_vec().end());
