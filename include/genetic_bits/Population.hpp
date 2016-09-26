@@ -92,6 +92,6 @@ public:
 
   using Base::Base;
 
-}; // class Population
+}; // class Population<CBase, is_ref>
 
 } // namespace gen

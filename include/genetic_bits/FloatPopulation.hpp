@@ -163,7 +163,7 @@ public:
   struct Stat {
     double mean;  ///< The mean fitness of the population.
     double stdev; ///< The standard deviation of fitness in the population.
-  };
+  }; // struct FloatPopulation<>::Stat
 
   /** \brief Returns the mean fitness of the population and the standard
    * deviation.
@@ -187,6 +187,6 @@ public:
             dev2 >= 0 ? sqrt(dev2) : 0};
   }
 
-}; // class FloatPopulation
+}; // class FloatPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

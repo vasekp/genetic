@@ -92,6 +92,6 @@ public:
     return front<typename Base::Val>(parallel);
   }
 
-}; // class DomPupolation
+}; // class DomPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

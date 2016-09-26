@@ -20,7 +20,8 @@ struct TagWrap {
 
   operator const Tag&() const { return t; }
 
-}; // class TagWrap
+}; // struct TagWrap<Tag>
+
 
 /* This specialization is an empty class, as a base it will take no extra
  * memory. (This would not hold if there was a named member like in the
@@ -31,7 +32,7 @@ struct TagWrap<empty>: empty {
 
   TagWrap(...) { }
 
-}; // class TagWrap
+}; // struct TagWrap<empty>
 
 
 
@@ -86,7 +87,7 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
     return static_cast<reference>(c1) << static_cast<reference>(c2);
   }
 
-}; // class CandidateTagged
+}; // struct CandidateTagged<Candidate, ref, Tag>
 
 
 
@@ -126,7 +127,7 @@ public:
     return {It::operator-(n)};
   }
 
-}; // class CTIterator
+}; // class CTIterator<It, move>
 
 
 /* We need a specialization of std::move_iterator and std::reverse_iterator
@@ -138,7 +139,8 @@ public:
 
   explicit move_iterator(It it): std::move_iterator<It>(it) { }
 
-}; // class move_iterator<CTIterator>
+}; // class move_iterator<It>
+
 
 template<class It>
 class move_iterator<CTIterator<It, false>>: public CTIterator<It, true> {
@@ -167,6 +169,6 @@ public:
 
   constexpr reverse_iterator(reverse_iterator<It> x): Base(x) { }
 
-};
+}; // class std::reverse_iterator<CTIterator>
 
 } // namespace std

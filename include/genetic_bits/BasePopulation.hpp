@@ -622,6 +622,6 @@ private:
     std::shuffle(Base::begin(), Base::end(), rng);
   }
 
-}; // class BasePopulation
+}; // class BasePopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

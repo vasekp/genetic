@@ -309,7 +309,7 @@ private:
       return ref.rend();
     }
 
-  }; // inner class ReverseIterable
+  }; // class OrdPopulation<>::ReverseIterable
 
 public:
 
@@ -371,6 +371,6 @@ private:
     }
   }
 
-}; // class OrdPopulation
+}; // class OrdPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

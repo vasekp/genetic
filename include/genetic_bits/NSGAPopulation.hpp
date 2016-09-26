@@ -182,7 +182,7 @@ private:
     size_t& rRank() {
       return rCT.tag();
     }
-  };
+  }; // struct NSGAPopulation<>::nsga_struct
 
   NOINLINE void nsga_rate(bool parallel = false) {
     std::vector<nsga_struct> vec{};
@@ -284,6 +284,6 @@ public:
     }
   }
 
-}; // class NSGAPopulation
+}; // class NSGAPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

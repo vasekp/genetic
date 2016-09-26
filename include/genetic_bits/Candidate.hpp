@@ -47,7 +47,7 @@ public:
     constexpr static bool is_float =
       std::is_convertible<FitnessType, double>::value;
 
-  };
+  }; // struct Traits
 #endif
 
 private:
@@ -97,6 +97,6 @@ public:
     return c1.fitness() << c2.fitness();
   }
 
-}; // class Candidate
+}; // class Candidate<CBase>
 
 } // namespace gen
