@@ -11,6 +11,9 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 /** \brief The BasePopulation template, covering functionality common to all
  * the derived Population classes.
  *
+ * This is an inner class of the framework, not suitable to be used directly
+ * by applications.
+ *
  * \tparam CBase the base class of the member candidates of this population.
  * See Candidate for details.
  * \tparam is_ref if set to \b true, this is a reference population. See

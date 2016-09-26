@@ -44,14 +44,16 @@ class PopulationChooser:
  * Depending on the properties of the candidate base class \b CBase,
  * \link gen::Population Population<CBase> \endlink becomes a synonyme for:
  * - OrdPopulation if \b CBase supports a <b>bool operator<()</b>,
- * - FloatPopulation if, moreover, its Fitness type is a simple floating type,
+ * - FloatPopulation if, moreover, its \b Fitness type is a simple floating
+ *   type,
  * - DomPopulation if \b CBase supports a <b>bool operator<<()</b>,
  * - BasePopulation in all other cases (this is the subclass of the above
  *   three).
  *
- * Note that the existence of \b operator<() is checked first, so if both of
- * the operators are defined, \b operator<<() is ignored and the methods made
- * accessible in DomPopulation are not defined.
+ * If both operators are present then the union of all functions provided by
+ * the respective classes is exposed. This allows scenarios where a
+ * multi-objective search is supplemented by a sorting of the results, for
+ * example.
  *
  * A Population can be used as a container of <b>Candidate</b>s with read-only
  * access. (See Candidate for discussion about the relation between a
