@@ -11,6 +11,9 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 /** \brief The BasePopulation template, covering functionality common to all
  * the derived Population classes.
  *
+ * This is an inner class of the framework, not suitable to be used directly
+ * by applications.
+ *
  * \tparam CBase the base class of the member candidates of this population.
  * See Candidate for details.
  * \tparam is_ref if set to \b true, this is a reference population. See
@@ -23,9 +26,18 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
  * Controls the return type of selection functions. */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifndef DOXYGEN
 class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
+#else
+class BasePopulation {
+#endif
 
   using Base = internal::PBase<CBase, is_ref, Tag>;
+
+  /* For access to begin(), end(), size() etc. via CRTP */
+  friend class OrdPopulation<CBase, is_ref, Tag, Population>;
+  friend class FloatPopulation<CBase, is_ref, Tag, Population>;
+  friend class DomPopulation<CBase, is_ref, Tag, Population>;
 
 protected:
 
@@ -203,7 +215,9 @@ public:
    * If \b count is larger than the actual size of the population, all
    * references may be invalidated. */
   void reserve(size_t count) {
-    internal::write_lock lock{smp};
+    // Does not count as a modification
+    // Invalidates iterators, but they may not be kept between locks anyway.
+    internal::write_lock lock{smp, false};
     Base::reserve(count);
   }
 

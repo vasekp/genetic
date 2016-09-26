@@ -5,20 +5,34 @@ class Population;
 
 namespace internal {
 
-template<class CBase, bool is_ref>
-using PopulationChooser = typename std::conditional<
+#ifndef DOXYGEN
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+using OrderChooser = typename std::conditional<
   Candidate<CBase>::Traits::is_comparable,
   typename std::conditional<
     Candidate<CBase>::Traits::is_float,
-    FloatPopulation<CBase, is_ref, internal::empty, gen::Population>,
-    OrdPopulation<CBase, is_ref, internal::empty, gen::Population>
+    FloatPopulation<CBase, is_ref, Tag, Population>,
+    OrdPopulation<CBase, is_ref, Tag, Population>
   >::type,
-  typename std::conditional<
-    Candidate<CBase>::Traits::is_dominable,
-    DomPopulation<CBase, is_ref, internal::empty, gen::Population>,
-    BasePopulation<CBase, is_ref, internal::empty, gen::Population>
-  >::type
->::type; // type alias PopulationChooser
+  empty
+>::type;
+
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+using DominationChooser = typename std::conditional<
+  Candidate<CBase>::Traits::is_dominable,
+  DomPopulation<CBase, is_ref, Tag, Population>,
+  empty
+>::type;
+
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+class PopulationChooser:
+  public internal::OrderChooser<CBase, is_ref, Tag, Population>,
+  public internal::DominationChooser<CBase, is_ref, Tag, Population>
+{ };
+#endif
 
 } // namespace internal
 
@@ -30,14 +44,16 @@ using PopulationChooser = typename std::conditional<
  * Depending on the properties of the candidate base class \b CBase,
  * \link gen::Population Population<CBase> \endlink becomes a synonyme for:
  * - OrdPopulation if \b CBase supports a <b>bool operator<()</b>,
- * - FloatPopulation if, moreover, its Fitness type is a simple floating type,
+ * - FloatPopulation if, moreover, its \b Fitness type is a simple floating
+ *   type,
  * - DomPopulation if \b CBase supports a <b>bool operator<<()</b>,
  * - BasePopulation in all other cases (this is the subclass of the above
  *   three).
  *
- * Note that the existence of \b operator<() is checked first, so if both of
- * the operators are defined, \b operator<<() is ignored and the methods made
- * accessible in DomPopulation are not defined.
+ * If both operators are present then the union of all functions provided by
+ * the respective classes is exposed. This allows scenarios where a
+ * multi-objective search is supplemented by a sorting of the results, for
+ * example.
  *
  * A Population can be used as a container of <b>Candidate</b>s with read-only
  * access. (See Candidate for discussion about the relation between a
@@ -65,9 +81,12 @@ using PopulationChooser = typename std::conditional<
  *
  * \see NSGAPopulation */
 template<class CBase, bool is_ref = false>
-class Population: public internal::PopulationChooser<CBase, is_ref> {
+class Population:
+  public BasePopulation<CBase, is_ref, internal::empty, Population>,
+  public internal::PopulationChooser<CBase, is_ref, internal::empty, Population>
+{
 
-  using Base = internal::PopulationChooser<CBase, is_ref>;
+  using Base = BasePopulation<CBase, is_ref, internal::empty, Population>;
 
 public:
 

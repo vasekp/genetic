@@ -63,7 +63,7 @@ namespace internal {
 
   protected:
 
-    rw_lock(rw_semaphore& s_, bool write_): s(s_), write(write_) {
+    rw_lock(rw_semaphore& s_, bool write_, bool inc): s(s_), write(write_) {
       if(write) {
         // Logic: write creates a persistent lock, preventing other writes from
         // starting. They can still execute ++s.w to let themselves known but
@@ -72,7 +72,13 @@ namespace internal {
         pers_lock = std::unique_lock<std::mutex>(s.m);
         ++s.w;
         s.wq.wait(pers_lock, [&] { return s.r == 0; });
-        ++s.mod_cnt;
+        // Increment the modification counter conditionally. Sometimes a
+        // writer lock is acquired and later found that no modification is
+        // necessary, e.g., if another thread did it in the meantime. Another
+        // situation where this can be useful is when an update of the
+        // resource does not count as a change of the observable state.
+        if(inc)
+          bump();
       } else {
         // Logic: read creates a temporary lock for the purposes of rq.wait and
         // s.r access. Read can only start when no one is writing or waiting to
@@ -112,14 +118,10 @@ namespace internal {
      * they will have to wait for each other, and may get the lock in any
      * order, changing the state visible to the other ones.
      *
-     * However, a thread can check if its upgrade request was uninterrupted
-     * by other threads, if necessary, by comparing if s.mod_cnt raised by 1
-     * exactly.
-     *
      * Returns whether an upgrade happened: the returned value is false if
      * this was already a writer lock. This is useful for a conditional
      * downgrade() later when given a lock of unknown type. */
-    bool upgrade() {
+    bool upgrade(bool inc = true) {
       if(write)
         return false;
       // Atomically combined action of -read and +write
@@ -128,7 +130,8 @@ namespace internal {
       --s.r;
       write = true;
       s.wq.wait(pers_lock, [&] { return s.r == 0; });
-      ++s.mod_cnt;
+      if(inc)
+        bump();
       // It makes no sense for another waiting write to wake up now, that
       // would defeat the purpose of the upgrade. But we need to notify the
       // other threads that r might be zero as no one else would do that.
@@ -147,17 +150,20 @@ namespace internal {
      * Throws an exception if this was already a write lock, because it could
      * not be distinguished whether the upgrade was not successful due to the
      * condition or due to that. */
-    bool upgrade_if(std::function<bool()> cond) {
+    bool upgrade_if(std::function<bool()> cond, bool inc = true) {
       if(write)
         throw std::logic_error("upgrade_if called on a write lock");
       if(!cond())
         return false;
-      upgrade();
+      upgrade(false);
       if(!cond()) {
         downgrade();
         return false;
-      } else
+      } else {
+        if(inc)
+          bump();
         return true;
+      }
     }
 
     /* Downgrade a write lock to a read lock, allowing the read to finish
@@ -174,13 +180,29 @@ namespace internal {
       s.rq.notify_all();
     }
 
+    /* Manually increment the modification counter. This is used in patterns
+     * where we don't know for sure whether an actual modification is going to
+     * happen at the time of acquiring a writer's lock or upgrading a reader's
+     * one. With default parameters to the respective constructors this
+     * happens automatically.
+     *
+     * Can be called multiple times within a write_lock. However, it must be
+     * called at least once before any operations affecting the observable
+     * state. */
+    void bump() {
+      if(!write)
+        throw std::logic_error("bump() called in a reader lock");
+      else
+        ++s.mod_cnt;
+    }
+
   }; // class rw_lock
 
 
   class read_lock: public rw_lock {
 
   public:
-    read_lock(rw_semaphore& s): rw_lock(s, false) { }
+    read_lock(rw_semaphore& s): rw_lock(s, false, false) { }
 
   }; // class read_lock
 
@@ -188,7 +210,7 @@ namespace internal {
   class write_lock: public rw_lock {
 
   public:
-    write_lock(rw_semaphore& s): rw_lock(s, true) { }
+    write_lock(rw_semaphore& s, bool inc = true): rw_lock(s, true, inc) { }
 
   }; // class write_lock
 
@@ -200,8 +222,8 @@ namespace internal {
 
   public:
 
-    upgrade_lock(rw_lock& l_): l(l_) {
-      u = l.upgrade();
+    upgrade_lock(rw_lock& l_, bool inc = true): l(l_) {
+      u = l.upgrade(inc);
     }
 
     ~upgrade_lock() {

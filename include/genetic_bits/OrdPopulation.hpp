@@ -5,13 +5,24 @@ namespace gen {
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifdef DOXYGEN
 class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
+#else
+class OrdPopulation {
+#endif
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Derived = Population<CBase, is_ref>;
 
-  /* Protects: last_sort_mod, rankSelect_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore sort_smp{};
+  Base& base() {
+    return static_cast<Base&>(static_cast<Derived&>(*this));
+  }
+
+  const Base& base() const {
+    return static_cast<const Base&>(static_cast<const Derived&>(*this));
+  }
+
+  using iterator = typename Base::iterator;
 
   size_t last_sort_mod{(size_t)(~0)};
   std::uniform_real_distribution<double> uniform{0, 1};
@@ -22,27 +33,8 @@ class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
 public:
 
-  using Base::Base;
-  using Base::smp;
-  using Base::begin;
-  using Base::end;
-  using Base::size;
-  using Base::operator[];
-  using typename Base::iterator;
-
   /** \brief Creates an empty population. */
   OrdPopulation() = default;
-
-  /** \copydoc BasePopulation::reserve */
-  void reserve(size_t count) {
-    Base::reserve(count);
-    /* The above command raised smp.mod_cnt by at least 1 but did not disturb
-     * sorting. If our population was sorted we reflect that by manually
-     * incrementing last_sort_mod. If we weren't level before, or if it rose by
-     * more than 1, we won't have is_sorted() afterwards, as intended. */
-    internal::write_lock sort_lock{sort_smp};
-    ++last_sort_mod;
-  }
 
   /** \brief Returns the best candidate of population.
    *
@@ -58,7 +50,7 @@ public:
    *
    * \throws std::out_of_bounds if called on an empty population. */
   const Candidate<CBase>& best() {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *best_int(lock, true);
   }
 
@@ -70,7 +62,7 @@ public:
    *
    * \throws std::out_of_bounds if called on an empty population. */
   Candidate<CBase> best_v() {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *best_int(lock, true);
   }
 
@@ -91,16 +83,16 @@ public:
 private:
 
   iterator best_int(internal::rw_lock& lock, bool validate) {
-    if(Base::empty()) {
+    if(base().empty()) {
       if(validate)
         throw std::out_of_range("best(): Population is empty.");
       else
-        return end();
+        return base().end();
     }
     else if(is_sorted(lock))
-      return {begin()};
+      return base().begin();
     else
-      return {std::min_element(begin(), end())};
+      return std::min_element(base().begin(), base().end());
   }
 
 public:
@@ -180,7 +172,7 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double max, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     if(internal::is_exp<fun>::value)
       return *rankSelect_exp(max, rng, lock, true);
     else
@@ -191,13 +183,13 @@ public:
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *rankSelect_two<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     if(internal::is_exp<fun>::value)
       return *rankSelect_exp(bias, rng, lock, true);
     else
@@ -208,7 +200,7 @@ public:
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *rankSelect_two<fun>(bias, rng, lock, true);
   }
 
@@ -235,34 +227,33 @@ private:
   NOINLINE iterator rankSelect_exp(double bias, Rng& rng,
       internal::rw_lock& lock, bool validate) {
     double x = uniform(rng);
-    size_t sz = size();
+    size_t sz = base().size();
     if(sz == 0) {
       if(validate)
         throw std::out_of_range("rankSelect(): Population is empty.");
       else
-        return end();
+        return base().end();
     }
     ensure_sorted(lock);
     // Bug in GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63176
     if(x == 1)
-      return end() - 1;
+      return base().end() - 1;
     else
-      return begin() + ((int)(-log(1 - x + x*exp(-bias))/bias*sz));
+      return base().begin() + ((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
   template<double (*fun)(double, double), class Rng>
   NOINLINE iterator rankSelect_two(double bias, Rng& rng,
       internal::rw_lock& lock, bool validate) {
-    size_t sz = size();
+    size_t sz = base().size();
     if(sz == 0) {
       if(validate)
         throw std::out_of_range("rankSelect(): Population is empty.");
       else
-        return end();
+        return base().end();
     }
-    internal::read_lock sort_lock{sort_smp};
     if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
-      sort_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded over ensure_sorted() later
       rankSelect_probs.clear();
       rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
@@ -273,7 +264,7 @@ private:
       rankSelect_last_bias = bias;
     }
     ensure_sorted(lock);
-    return begin() + rankSelect_dist(rng);
+    return base().begin() + rankSelect_dist(rng);
   }
 
 public:
@@ -284,17 +275,18 @@ public:
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   NOINLINE void rankTrim(size_t newSize) {
-    internal::read_lock lock{smp};
-    if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
-      return;
-    if(size() == 0)
+    internal::read_lock lock{base().smp};
+    if(!lock.upgrade_if([newSize,this]() -> bool {
+          return base().size() > newSize;
+        }))
       return;
     ensure_sorted(lock);
-    auto& dummy = Base::first(); // see BasePopulation::randomTrim()
-    Base::as_vec().resize(newSize, dummy);
-    // See reserve()
-    // No sort_lock needed (have write_lock(smp))
-    ++last_sort_mod;
+    /* ensureSorted() does this when it actually changes order.  We might have
+     * incremented mod_cnt by the upgrade_lock above, though. Anyway, we are
+     * certainly sorted now. */
+    last_sort_mod = base().smp.get_mod_cnt();
+    auto& dummy = base().first(); // see BasePopulation::randomTrim()
+    base().as_vec().resize(newSize, dummy);
   }
 
   /** \brief Sorts the population by fitness for faster response of future
@@ -308,7 +300,7 @@ public:
    * threads. Parallel sorting is currently not supported but this can still
    * be used to guarantee a better balanced workload for individual threads. */
   NOINLINE void sort() {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     ensure_sorted(lock);
   }
 
@@ -329,19 +321,17 @@ public:
 private:
 
   bool is_sorted(const internal::rw_lock&) const {
-    internal::read_lock sort_lock{sort_smp};
-    return smp.get_mod_cnt() == last_sort_mod;
+    return base().smp.get_mod_cnt() == last_sort_mod;
   }
 
   void ensure_sorted(internal::rw_lock& lock) {
     if(!is_sorted(lock)) {
-      internal::upgrade_lock up{lock};
-      // No one else can be reading or modifying this now (⇐ promise)
-      ++last_sort_mod;
+      // Does not count as a modification (Population is a set)
+      internal::upgrade_lock up{lock, false};
       if(is_sorted(lock))
         return;
-      std::sort(Base::as_vec().begin(), Base::as_vec().end());
-      last_sort_mod = smp.get_mod_cnt();
+      std::sort(base().as_vec().begin(), base().as_vec().end());
+      last_sort_mod = base().smp.get_mod_cnt();
     }
   }
 
