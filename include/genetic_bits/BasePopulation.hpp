@@ -11,6 +11,9 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
 /** \brief The BasePopulation template, covering functionality common to all
  * the derived Population classes.
  *
+ * This is an inner class of the framework, not suitable to be used directly
+ * by applications.
+ *
  * \tparam CBase the base class of the member candidates of this population.
  * See Candidate for details.
  * \tparam is_ref if set to \b true, this is a reference population. See
@@ -23,17 +26,29 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
  * Controls the return type of selection functions. */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifndef DOXYGEN
 class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
+#else
+class BasePopulation {
+#endif
 
   using Base = internal::PBase<CBase, is_ref, Tag>;
 
-  using iterator = internal::CTIterator<typename Base::iterator>;
-  using const_iterator = internal::CTIterator<typename Base::const_iterator>;
+  /* For access to begin(), end(), size() etc. via CRTP */
+  friend class OrdPopulation<CBase, is_ref, Tag, Population>;
+  friend class FloatPopulation<CBase, is_ref, Tag, Population>;
+  friend class DomPopulation<CBase, is_ref, Tag, Population>;
 
 protected:
 
 #ifndef DOXYGEN
+  using iterator = internal::CTIterator<typename Base::iterator>;
+  using const_iterator = internal::CTIterator<typename Base::const_iterator>;
+
   mutable internal::rw_semaphore smp{};
+
+  /* Allow access to smp */
+  friend class PopulationLock;
 #endif
 
 public:
@@ -115,7 +130,9 @@ public:
   }
 
   /** \brief Initializes this population from a container of <b>Candidate</b>s
-   * or <b>CBase</b>s (e.g., a \b std::vector or another Population).
+   * or <b>CBase</b>s (e.g., a [**std::vector**] (http://en.cppreference.com/w/
+   * cpp/container/vector) or another Population).
+   *
    * \copydetails add(const Container&) */
   template<class Container>
   explicit BasePopulation(const Container& vec) {
@@ -184,7 +201,7 @@ public:
 
 #ifdef DOXYGEN
   /** \brief Returns the current count of candidates. */
-  size_t size();
+  size_t size() const;
 #else
   using Base::size;
 #endif
@@ -200,38 +217,75 @@ public:
    * If \b count is larger than the actual size of the population, all
    * references may be invalidated. */
   void reserve(size_t count) {
-    internal::write_lock lock{smp};
+    // Does not count as a modification
+    // Invalidates iterators, but they may not be kept between locks anyway.
+    internal::write_lock lock{smp, false};
     Base::reserve(count);
   }
 
   /** \brief Returns an iterator to the beginning.
    *
+   * This iterator dereferences to a \link gen::Candidate const
+   * Candidate<CBase>&\endlink.
+   *
    * Note that using iterators to access the individual candidates in a
    * Population circumvents the memory locking mechanisms. In any case
    * references to members of a population are invalidated, so are any
-   * currently stored iterators. */
+   * currently stored iterators.
+   *
+   * \see PopulationLock */
   iterator begin() {
-    return iterator{Base::begin()};
+    return {Base::begin()};
   }
 
   /** \brief Returns the past-the-end iterator. */
   iterator end() {
-    return iterator{Base::end()};
+    return {Base::end()};
   }
 
-  /** \brief Returns a constant iterator to the beginning.
-   * \copydetails begin() */
+#ifndef DOXYGEN
+  /* There is no user-observable difference between an iterator and a
+   * const_iterator. Both dereference to a const Candidate&. The difference
+   * arises internally when a Population is moved because iterator can be
+   * turned into a move_iterator and const_iterator can not. */
+
   const_iterator begin() const {
-    return const_iterator{Base::begin()};
+    return {Base::begin()};
   }
 
-  /** \brief Returns the constant past-the-end iterator. */
   const_iterator end() const {
-    return const_iterator{Base::end()};
+    return {Base::end()};
   }
+
+protected:
+  /* We also don't document protected members.
+   * This is accessed from OrdPopulation, other kinds of Population are
+   * insensitive to ordering. */
+
+  std::reverse_iterator<iterator> rbegin() {
+    return {Base::rbegin()};
+  }
+
+  std::reverse_iterator<iterator> rend() {
+    return {Base::rend()};
+  }
+
+  std::reverse_iterator<const_iterator> rbegin() const {
+    return {Base::rbegin()};
+  }
+
+  std::reverse_iterator<const_iterator> rend() const {
+    return {Base::rend()};
+  }
+#endif
+
+public:
 
   /** \brief Read-only access to a specified element by reference
-   * (no bounds checking). */
+   * (no bounds checking).
+   *
+   * Does not lock the population for read access. If another thread
+   * simultaneously modifies the population the results are undefined. */
   const Candidate<CBase>& operator[](size_t pos) const {
     return static_cast<const Candidate<CBase>&>(Base::operator[](pos));
   }
@@ -239,11 +293,13 @@ public:
   /** \brief Read-only access to a specified element by reference
    * (with bounds checking). */
   const Candidate<CBase>& at(size_t pos) const {
+    internal::read_lock lock{smp};
     return static_cast<const Candidate<CBase>&>(Base::at(pos));
   }
 
   /** \brief Returns a specified element by value (with bounds checking) */
   Candidate<CBase> at_v(size_t pos) const {
+    internal::read_lock lock{smp};
     return static_cast<const Candidate<CBase>>(Base::at(pos));
   }
 
@@ -286,7 +342,8 @@ public:
    *
    * \param count the number of candidates to generate
    * \param src source function; can be any callable object (e.g., a
-   * \b std::function, a function pointer, or a lambda function) returning
+   * [**std::function**] (http://en.cppreference.com/w/cpp/utility/functional/
+   * function), a function pointer, or a lambda function) returning
    * either of \link gen::Candidate Candidate<CBase> \endlink or \b CBase and
    * either by value or by reference (a copy will be taken). In many cases the
    * function call can be inlined by the optimizer if known at compile time.
@@ -462,31 +519,61 @@ public:
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use \link randomSelect_v(Rng&) const randomSelect_v(Rng&)
-   * \endlink instead. */
-#ifdef DOXYGEN
+   * allows this, use randomSelect_v(Rng&) instead.
+   *
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
-  const Candidate<CBase>& randomSelect(Rng& rng = rng) const {
-#else
-  template<class Rng = decltype(rng), class Ret = const Candidate<CBase>&>
-  Ret randomSelect(Rng& rng = rng) const {
-#endif
+  const Candidate<CBase>& randomSelect(Rng& rng = rng) {
     internal::read_lock lock{smp};
-    size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("randomSelect(): Population is empty.");
-    std::uniform_int_distribution<size_t> dist{0, sz - 1};
-    return operator[](dist(rng));
+    return *randomSelect_int(rng, lock, true);
   }
 
-  /** \copybrief randomSelect(Rng&) const
+  /** \copybrief randomSelect(Rng&)
    *
-   * Works like \link randomSelect(Rng&) const randomSelect(Rng&) \endlink but
-   * returns by value. */
+   * Works like randomSelect(Rng&) but returns by value.
+   *
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
-  Candidate<CBase> randomSelect_v(Rng& rng = rng) const {
-    return randomSelect<Candidate<CBase>>(rng);
+  Candidate<CBase> randomSelect_v(Rng& rng = rng) {
+    internal::read_lock lock{smp};
+    return *randomSelect_int(rng, lock, true);
   }
+
+  /** \copybrief randomSelect(Rng&)
+   *
+   * Works like randomSelect(Rng&) but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<class Rng = decltype(rng)>
+  iterator randomSelect_i(PopulationLock& lock, Rng& rng = rng) {
+    return randomSelect_int(rng, lock.get(), false);
+  }
+
+private:
+
+  template<class Rng>
+  iterator randomSelect_int(Rng& rng, internal::rw_lock&, bool validate) {
+    size_t sz = size();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("randomSelect(): Population is empty.");
+      else
+        return end();
+    }
+    std::uniform_int_distribution<size_t> dist{0, sz - 1};
+    return begin() + dist(rng);
+  }
+
+public:
 
   /** \brief Randomly selects \b k different candidates. If <b>k ≥ size()</b>,
    * the entire population is returned.
@@ -494,15 +581,14 @@ public:
    * The returned \link Ref \endlink remains valid until the original
    * population is modified.  Therefore there is a risk of invalidating it in
    * a multi-threaded program if another thread concurrently modifies the
-   * population. If your code allows this, use \link
-   * randomSelect_v(size_t, Rng&) const randomSelect_v(size_t, Rng&) \endlink
+   * population. If your code allows this, use randomSelect_v(size_t, Rng&)
    * instead. */
 #ifdef DOXYGEN
   template<class Rng = decltype(rng)>
-  Ref randomSelect(size_t k, Rng& rng = rng) const {
+  Ref randomSelect(size_t k, Rng& rng = rng) {
 #else
   template<class Rng = decltype(rng), class Ret = Ref>
-  NOINLINE Ret randomSelect(size_t k, Rng& rng = rng) const {
+  NOINLINE Ret randomSelect(size_t k, Rng& rng = rng) {
 #endif
     internal::read_lock lock{smp};
     size_t sz = size();
@@ -523,12 +609,12 @@ public:
     return ret;
   }
 
-  /** \copybrief randomSelect(size_t, Rng&) const
+  /** \copybrief randomSelect(size_t, Rng&)
    *
-   * Works like \link randomSelect(size_t, Rng&) const randomSelect(size_t,
-   * Rng&) \endlink but returns an independent population. */
+   * Works like randomSelect(size_t, Rng&) but returns an independent
+   * population. */
   template<class Rng = decltype(rng)>
-  Val randomSelect_v(size_t k, Rng& rng = rng) const {
+  Val randomSelect_v(size_t k, Rng& rng = rng) {
     return randomSelect<Val>(k, rng);
   }
 
@@ -539,6 +625,6 @@ private:
     std::shuffle(Base::begin(), Base::end(), rng);
   }
 
-}; // class BasePopulation
+}; // class BasePopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

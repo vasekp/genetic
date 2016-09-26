@@ -6,18 +6,24 @@ namespace gen {
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifdef DOXYGEN
 class DomPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
+#else
+class DomPopulation {
+#endif
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Derived = Population<CBase, is_ref>;
+
+  Base& base() {
+    return static_cast<Base&>(static_cast<Derived&>(*this));
+  }
+
+  const Base& base() const {
+    return static_cast<const Base&>(static_cast<const Derived&>(*this));
+  }
 
 public:
-
-  using Base::Base;
-  using Base::smp;
-  using Base::begin;
-  using Base::end;
-  using Base::size;
-  using Base::operator[];
 
   /** \brief Creates an empty population. */
   DomPopulation() = default;
@@ -60,22 +66,22 @@ public:
   template<class Ret = typename Base::Ref>
   NOINLINE Ret front(bool parallel = true) const {
 #endif
-    internal::read_lock lock{smp};
-    size_t sz = size();
+    internal::read_lock lock{base().smp};
+    size_t sz = base().size();
     // flag whether [i] has been found to be dominated by something
     // we can safely skip it on the LHS later to save some time
     std::vector<char> dom(sz, 0);
     #pragma omp parallel for if(parallel) schedule(dynamic)
     for(size_t i = 0; i < sz; i++)
       for(size_t j = 0; j < sz; j++)
-        if(!dom[j] && operator[](j) << operator[](i)) {
+        if(!dom[j] && base()[j] << base()[i]) {
           dom[i] = 1;
           break; // no omp collapse
         }
     Ret ret{};
     for(size_t i = 0; i < sz; i++)
       if(!dom[i])
-        ret.add(operator[](i));
+        ret.add(base()[i]);
     return ret;
   }
 
@@ -86,6 +92,6 @@ public:
     return front<typename Base::Val>(parallel);
   }
 
-}; // class DomPupolation
+}; // class DomPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

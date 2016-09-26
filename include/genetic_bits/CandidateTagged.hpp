@@ -20,7 +20,8 @@ struct TagWrap {
 
   operator const Tag&() const { return t; }
 
-}; // class TagWrap
+}; // struct TagWrap<Tag>
+
 
 /* This specialization is an empty class, as a base it will take no extra
  * memory. (This would not hold if there was a named member like in the
@@ -31,7 +32,7 @@ struct TagWrap<empty>: empty {
 
   TagWrap(...) { }
 
-}; // class TagWrap
+}; // struct TagWrap<empty>
 
 
 
@@ -58,6 +59,16 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
 
   CandidateTagged(CTBase<CBase, ref>&& c): CTBase<CBase, ref>(std::move(c)) { }
 
+  CandidateTagged& operator=(const gen::Candidate<CBase>& c) {
+    CTBase<CBase, ref>::operator=(c);
+    return *this;
+  }
+
+  CandidateTagged& operator=(CTBase<CBase, ref>&& c) {
+    CTBase<CBase, ref>::operator=(std::move(c));
+    return *this;
+  }
+
   Tag& tag() {
     return static_cast<Tag&>(static_cast<TagWrap<Tag>&>(*this));
   }
@@ -76,7 +87,7 @@ struct CandidateTagged : public CTBase<CBase, ref>, private TagWrap<Tag> {
     return static_cast<reference>(c1) << static_cast<reference>(c2);
   }
 
-}; // class CandidateTagged
+}; // struct CandidateTagged<Candidate, ref, Tag>
 
 
 
@@ -109,17 +120,18 @@ public:
   }
 
   CTIterator operator+(difference_type n) {
-    return CTIterator{It::operator+(n)};
+    return {It::operator+(n)};
   }
 
   CTIterator operator-(difference_type n) {
-    return CTIterator{It::operator-(n)};
+    return {It::operator-(n)};
   }
 
-}; // class CTIterator
+}; // class CTIterator<It, move>
 
 
-/* We need a specialization of std::move_iterator for our CTIterator. */
+/* We need a specialization of std::move_iterator and std::reverse_iterator
+ * for our CTIterator. */
 template<class It>
 class move_iterator: public std::move_iterator<It> {
 
@@ -127,7 +139,8 @@ public:
 
   explicit move_iterator(It it): std::move_iterator<It>(it) { }
 
-}; // class move_iterator<CTIterator>
+}; // class move_iterator<It>
+
 
 template<class It>
 class move_iterator<CTIterator<It, false>>: public CTIterator<It, true> {
@@ -141,3 +154,21 @@ public:
 } // namespace internal
 
 } // namespace gen
+
+
+namespace std {
+
+template<class It, bool move>
+class reverse_iterator<gen::internal::CTIterator<It, move>> :
+  public gen::internal::CTIterator<reverse_iterator<It>, move>
+{
+
+  using Base = gen::internal::CTIterator<reverse_iterator<It>, move>;
+
+public:
+
+  constexpr reverse_iterator(reverse_iterator<It> x): Base(x) { }
+
+}; // class std::reverse_iterator<CTIterator>
+
+} // namespace std

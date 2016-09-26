@@ -11,17 +11,15 @@ namespace gen {
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
 class NSGAPopulation:
-  public DomPopulation<CBase, is_ref, size_t, NSGAPopulation>
+  public BasePopulation<CBase, is_ref, size_t, NSGAPopulation>,
+  public internal::PopulationChooser<CBase, is_ref, size_t, NSGAPopulation>
 {
 
   static_assert(Candidate<CBase>::Traits::is_dominable,
       "The fitness type of CBase needs to support bool operator<<()!");
 
-  using Base = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
-
-  /* Protects: nsga_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore nsga_smp{};
+  using Base = BasePopulation<CBase, is_ref, size_t, NSGAPopulation>;
+  using Dom = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
 
   std::discrete_distribution<size_t> nsga_dist{};
   std::vector<double> nsga_probs{};
@@ -36,6 +34,7 @@ public:
   using Base::end;
   using Base::size;
   using Base::operator[];
+  using typename Base::iterator;
 
   /** \brief Creates an empty population. */
   NSGAPopulation() = default;
@@ -49,7 +48,6 @@ public:
 #endif
     {
       internal::read_lock lock{smp};
-      internal::read_lock nsga_lock{nsga_smp};
       if(smp.get_mod_cnt() == nsga_last_mod) {
         Ret ret{};
         for(auto& tg : Base::as_vec())
@@ -58,7 +56,7 @@ public:
         return ret;
       }
     }
-    return Base::template front<Ret>(parallel);
+    return static_cast<const Dom&>(*this).front<Ret>(parallel);
   }
 
   /** \copydoc DomPopulation::front_v() */
@@ -86,15 +84,19 @@ public:
    * arguments are \b x and \b bias, where \b x denotes the dominance rank of
    * the candidate.  It must be positive and strictly increasing in \b x for
    * <b>bias > 0</b>.  This function will be built in at compile time,
-   * eliminating a function pointer lookup. The default is \b std::exp,
-   * another usual choice is \b std::pow.
+   * eliminating a function pointer lookup. The default is [**std::exp**]
+   * (http://en.cppreference.com/w/cpp/numeric/math/exp), another usual choice
+   * is [**std::pow**] (http://en.cppreference.com/w/cpp/numeric/math/pow).
    * \param bias > 0 determines how much low-dominated solutions are preferred.
    * Zero would mean no account on dominance rank in the selection process
-   * whatsoever. The bigger the value the more low-dominated candidates are
-   * likely to be selected.
+   * whatsoever. A very large value would mean that candidates would be
+   * selected almost exclusively from the nondominated front (uniformly
+   * distributed).
    * \param rng the random number generator, or gen::rng by default.
    *
-   * \returns a constant reference to a randomly chosen candidate. */
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng);
 
@@ -102,36 +104,65 @@ public:
    *
    * Works like NSGASelect() but returns by value.
    *
-   * \returns a copy of the randomly chosen candidate. */
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng);
+
+  /** \copybrief NSGASelect()
+   *
+   * Works like NSGASelect() but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double mult, Rng& rng = rng) {
-    return NSGASelect_int<
-      const Candidate<CBase>&,
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(mult, rng);
+    >(mult, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& NSGASelect(double bias, Rng& rng = rng) {
-    return NSGASelect_int<const Candidate<CBase>&, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<
-      Candidate<CBase>,
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<
       &internal::eval_in_product<fun>
-    >(bias, rng);
+    >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> NSGASelect_v(double bias, Rng& rng = rng) {
-    return NSGASelect_int<Candidate<CBase>, fun>(bias, rng);
+    internal::read_lock lock{smp};
+    return *NSGASelect_int<fun>(bias, rng, lock, true);
+  }
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return NSGASelect_int<
+      &internal::eval_in_product<fun>
+    >(bias, rng, lock, false);
+  }
+
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  iterator NSGASelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return NSGASelect_int<fun>(bias, rng, lock, false);
   }
 
 #endif
@@ -153,7 +184,7 @@ private:
     size_t& rRank() {
       return rCT.tag();
     }
-  };
+  }; // struct NSGAPopulation<>::nsga_struct
 
   NOINLINE void nsga_rate(bool parallel = false) {
     std::vector<nsga_struct> vec{};
@@ -207,15 +238,18 @@ private:
     }
   }
 
-  template<class Ret, double (*fun)(double, double), class Rng>
-  NOINLINE Ret NSGASelect_int(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<double (*fun)(double, double), class Rng>
+  NOINLINE iterator NSGASelect_int(double bias, Rng& rng,
+      internal::rw_lock& lock, bool validate) {
     size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("NSGASelect(): Population is empty.");
-    internal::read_lock nsga_lock{nsga_smp};
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("NSGASelect(): Population is empty.");
+      else
+        return end();
+    }
     if(smp.get_mod_cnt() != nsga_last_mod || bias != nsga_last_bias) {
-      nsga_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded
       if(smp.get_mod_cnt() != nsga_last_mod)
         nsga_rate(false);
       nsga_probs.clear();
@@ -227,8 +261,7 @@ private:
       nsga_last_mod = smp.get_mod_cnt();
       nsga_last_bias = bias;
     }
-    size_t ix = nsga_dist(rng);
-    return operator[](ix);
+    return begin() + nsga_dist(rng);
   }
 
 public:
@@ -246,14 +279,13 @@ public:
    * \param parallel controls parallelization using OpenMP (on by default) */
   void precompute(bool parallel = true) {
     internal::read_lock lock{smp};
-    internal::read_lock nsga_lock{nsga_smp};
     if(smp.get_mod_cnt() != nsga_last_mod) {
-      nsga_lock.upgrade();
+      lock.upgrade(false);
       nsga_rate(parallel);
       nsga_last_mod = smp.get_mod_cnt();
     }
   }
 
-}; // class NSGAPopulation
+}; // class NSGAPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

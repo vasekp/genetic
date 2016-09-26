@@ -16,9 +16,9 @@ OpenMP 2.5 support is required to compile the code without warnings and to use
 the multithreading optimizations. GCC 4 and above are compliant with the 
 specification.
 
-Finally, the latest documentation is provided via [Doxygen][1] markup. 
+Finally, the latest documentation is provided via [Doxygen][doxy] markup.  
 Install Doxygen to make this accessible via `make doc`. (This step is 
-optional, the documentation is also available [online][2].)
+optional, the documentation is also available [online][doc].)
 
 
 ## Getting started
@@ -49,7 +49,7 @@ multiprocessor support, and `-O3` for proper performance.
 All the functionality is described in the Doxygen documentation embedded in 
 the header files. Use `make doc` to extract HTML with hyperlinks into the 
 `doc` directory. Alternatively, the documentation of the latest release 
-version can be accessed online [here][2].
+version can be accessed online [here][doc].
 
 Some examples are provided in the `examples` directory. Use `make examples` to 
 see them in action.
@@ -74,9 +74,9 @@ advantageous to explicitly call for this re-evaluation before using the
 dependent functions. See **gen::NSGAPopulation::precompute** for an example 
 scenario of this.
 
-Several function support parallelization via OpenMP tags, and this is on by 
-default. Each of such functions accepts a **bool** argument to turn off OpenMP 
-if not desirable. This will be the case
+Several function support parallelization via [OpenMP][omp] tags, and this is 
+on by default. Each of such functions accepts a **bool** argument to turn off 
+OpenMP if not desirable. This will be the case
 - when called from a single worker thread,
 - when the sample is too small.
 Note that for samples less than about 100 elements, the automatic heuristics 
@@ -84,19 +84,15 @@ for splitting the work fairly among worker thread may not work well and the
 overhead imposed by the system can easily outweight any advantage of 
 parallelization.
 
-Most of the framework is designed to be thread-safe, using fast user-space 
-locking mechanisms to prevent simultaneous writes or reading of an invalid 
-memory region. In some cases, however, preventing all possible cases 
-automatically would incur significant overhead and has been rejected. The 
-following functionality is not guarded by memory locks and must be protected 
-by proper program logic:
-1. Copying, moving, and assigning of entire **gen::Population** objects
-2. Reading from **gen::Population** as a container, namely using 
-   **gen::BasePopulation::begin()**, **gen::BasePopulation::end()**, 
-   **gen::BasePopulation::add(const Container&)**, and range-based 
-   **for**-loops.
-Destroying a **gen::Population** while read from or written to results in 
-a call to **std::terminate()**.
+All of the framework is designed to be internally thread-safe, using fast 
+user-space locking mechanisms to prevent simultaneous writes or reading of an 
+invalid memory region. If this guarantee needs to be extended to external 
+functions (for example, for the Standart Template Library's [container 
+algorithm functions][stl]), one can use the [RAII][raii] style 
+**gen::PopulationLock**.
 
-[1]: http://www.doxygen.org/index.html
-[2]: https://vasekp.github.io/genetic/doc/index.html
+[doxy]: http://www.doxygen.org/index.html
+[doc]: https://vasekp.github.io/genetic/doc/index.html
+[omp]: http://openmp.org/wp/
+[stl]: http://en.cppreference.com/w/cpp/algorithm
+[raii]: http://en.cppreference.com/w/cpp/language/raii

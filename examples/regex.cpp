@@ -125,6 +125,10 @@ namespace Context {
   void initDB(std::string fname) {
     std::string r;
     std::ifstream file{fname};
+    if(!file.is_open()) {
+      std::cerr << "File " << fname << " not found!" << std::endl;
+      std::exit(1);
+    }
     while(getline(file, r)) {
       if(r == "---") break;
       dbAccept.push_back(r);

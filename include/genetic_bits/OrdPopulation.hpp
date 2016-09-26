@@ -5,13 +5,25 @@ namespace gen {
  * \copydetails gen::BasePopulation */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifdef DOXYGEN
 class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
+#else
+class OrdPopulation {
+#endif
 
   using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Derived = Population<CBase, is_ref>;
 
-  /* Protects: last_sort_mod, rankSelect_* */
-  /* Promise: to be only acquired from within a read lock on the Base. */
-  mutable internal::rw_semaphore sort_smp{};
+  Base& base() {
+    return static_cast<Base&>(static_cast<Derived&>(*this));
+  }
+
+  const Base& base() const {
+    return static_cast<const Base&>(static_cast<const Derived&>(*this));
+  }
+
+  using iterator = typename Base::iterator;
+  using const_iterator = typename Base::const_iterator;
 
   size_t last_sort_mod{(size_t)(~0)};
   std::uniform_real_distribution<double> uniform{0, 1};
@@ -22,26 +34,8 @@ class OrdPopulation: public BasePopulation<CBase, is_ref, Tag, Population> {
 
 public:
 
-  using Base::Base;
-  using Base::smp;
-  using Base::begin;
-  using Base::end;
-  using Base::size;
-  using Base::operator[];
-
   /** \brief Creates an empty population. */
   OrdPopulation() = default;
-
-  /** \copydoc BasePopulation::reserve */
-  void reserve(size_t count) {
-    Base::reserve(count);
-    /* The above command raised smp.mod_cnt by at least 1 but did not disturb
-     * sorting. If our population was sorted we reflect that by manually
-     * incrementing last_sort_mod. If we weren't level before, or if it rose by
-     * more than 1, we won't have is_sorted() afterwards, as intended. */
-    internal::write_lock sort_lock{sort_smp};
-    ++last_sort_mod;
-  }
 
   /** \brief Returns the best candidate of population.
    *
@@ -51,28 +45,58 @@ public:
    * The returned reference remains valid until the population is modified.
    * Therefore there is a risk of invalidating it in a multi-threaded program
    * if another thread concurrently modifies the population. If your code
-   * allows this, use best_v() instead. */
-#ifdef DOXYGEN
+   * allows this, use best_v() instead.
+   *
+   * \returns a constant reference to the best-of-population.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   const Candidate<CBase>& best() {
-#else
-  template<class Ret = const Candidate<CBase>&>
-  Ret best() {
-#endif
-    internal::read_lock lock{smp};
-    if(this->empty())
-      throw std::out_of_range("best(): Population is empty.");
-    if(is_sorted(lock))
-      return Base::first();
-    else
-      return *std::min_element(begin(), end());
+    internal::read_lock lock{base().smp};
+    return *best_int(lock, true);
   }
 
   /** \copybrief best()
    *
-   * Works like best() but returns by value. */
+   * Works like best() but returns by value.
+   *
+   * \returns a copy of the best-of-population.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   Candidate<CBase> best_v() {
-    return best<Candidate<CBase>>();
+    internal::read_lock lock{base().smp};
+    return *best_int(lock, true);
   }
+
+  /** \copybrief best()
+   *
+   * Works like best() but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * \returns an iterator pointing to the best-of-population, end() if the
+   * population is empty. */
+  iterator best_i(PopulationLock& lock) {
+    return best_int(lock.get(), false);
+  }
+
+private:
+
+  iterator best_int(internal::rw_lock& lock, bool validate) {
+    if(base().empty()) {
+      if(validate)
+        throw std::out_of_range("best(): Population is empty.");
+      else
+        return base().end();
+    }
+    else if(is_sorted(lock))
+      return base().begin();
+    else
+      return std::min_element(base().begin(), base().end());
+  }
+
+public:
 
 #ifdef DOXYGEN
 
@@ -99,16 +123,19 @@ public:
    * arguments are \b x and \b bias, where \b x denotes the rescaled rank of
    * each candidate.  It must be positive and strictly increasing in \b x for
    * <b>bias > 0</b>.  This function will be built in at compile time,
-   * eliminating a function pointer lookup. The default is \b std::exp, for
-   * which an fast specialized algorithm is provided, another usual choice is
-   * \b std::pow.
+   * eliminating a function pointer lookup. The default is [**std::exp**]
+   * (http://en.cppreference.com/w/cpp/numeric/math/exp), for which an fast
+   * specialized algorithm is provided, another usual choice is
+   * [**std::pow**] (http://en.cppreference.com/w/cpp/numeric/math/pow).
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are
    * likely to be selected.
    * \param rng the random number generator, or gen::rng by default.
    *
-   * \returns a constant reference to a randomly chosen candidate. */
+   * \returns a constant reference to a randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng);
 
@@ -116,72 +143,119 @@ public:
    *
    * Works like rankSelect() but returns by value.
    *
-   * \returns a copy of the randomly chosen candidate. */
+   * \returns a copy of the randomly chosen candidate.
+   *
+   * \throws std::out_of_bounds if called on an empty population. */
   template<double (*fun)(...) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng);
+
+  /** \copybrief rankSelect()
+   *
+   * Works like rankSelect() but returns an iterator.
+   *
+   * This function relies on a read lock acquired externally for the
+   * population via a PopulationLock. This lock will guard the validity of the
+   * returned iterator.
+   *
+   * This function may need to reorder candidates stored in the population.
+   * This will temporarily upgrade the provided lock to a write lock (which
+   * implies waiting for other threads to finish their running read
+   * operations). This operation is guaranteed not to invalidate any iterators
+   * but the contents they refer to changes. Within the calling thread, the
+   * population observably changes if rankSelect_i() needed to sort the
+   * population.
+   *
+   * \returns an iterator pointing to the randomly selected candidate, end()
+   * if the population is empty. */
+  template<class Rng = decltype(rng)>
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng);
 
 #else
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double max, Rng& rng = rng) {
+    internal::read_lock lock{base().smp};
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<const Candidate<CBase>&>(max, rng);
+      return *rankSelect_exp(max, rng, lock, true);
     else
-      return rankSelect_two<
-        const Candidate<CBase>&,
+      return *rankSelect_two<
         &internal::eval_in_product<fun>
-      >(max, rng);
+      >(max, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& rankSelect(double bias, Rng& rng = rng) {
-    return rankSelect_two<const Candidate<CBase>&, fun>(bias, rng);
+    internal::read_lock lock{base().smp};
+    return *rankSelect_two<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
+    internal::read_lock lock{base().smp};
     if(internal::is_exp<fun>::value)
-      return rankSelect_exp<Candidate<CBase>>(bias, rng);
+      return *rankSelect_exp(bias, rng, lock, true);
     else
-      return rankSelect_two<
-        Candidate<CBase>,
+      return *rankSelect_two<
         &internal::eval_in_product<fun>
-      >(bias, rng);
+      >(bias, rng, lock, true);
   }
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> rankSelect_v(double bias, Rng& rng = rng) {
-    return rankSelect_two<Candidate<CBase>, fun>(bias, rng);
+    internal::read_lock lock{base().smp};
+    return *rankSelect_two<fun>(bias, rng, lock, true);
+  }
+
+  template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    if(internal::is_exp<fun>::value)
+      return rankSelect_exp(bias, rng, lock.get(), false);
+    else
+      return rankSelect_two<
+        &internal::eval_in_product<fun>
+      >(bias, rng, lock.get(), false);
+  }
+
+  template<double (*fun)(double, double), class Rng = decltype(rng)>
+  iterator rankSelect_i(PopulationLock& lock, double bias, Rng& rng = rng) {
+    return rankSelect_two<fun>(bias, rng, lock.get(), false);
   }
 
 #endif
 
 private:
 
-  template<class Ret, class Rng>
-  NOINLINE Ret rankSelect_exp(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
+  template<class Rng>
+  NOINLINE iterator rankSelect_exp(double bias, Rng& rng,
+      internal::rw_lock& lock, bool validate) {
     double x = uniform(rng);
-    size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("rankSelect(): Population is empty.");
+    size_t sz = base().size();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("rankSelect(): Population is empty.");
+      else
+        return base().end();
+    }
     ensure_sorted(lock);
     // Bug in GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63176
     if(x == 1)
-      return Base::last();
+      return base().end() - 1;
     else
-      return operator[]((int)(-log(1 - x + x*exp(-bias))/bias*sz));
+      return base().begin() + ((int)(-log(1 - x + x*exp(-bias))/bias*sz));
   }
 
-  template<class Ret, double (*fun)(double, double), class Rng>
-  NOINLINE Ret rankSelect_two(double bias, Rng& rng) {
-    internal::read_lock lock{smp};
-    size_t sz = size();
-    if(sz == 0)
-      throw std::out_of_range("rankSelect(): Population is empty.");
-    internal::read_lock sort_lock{sort_smp};
+  template<double (*fun)(double, double), class Rng>
+  NOINLINE iterator rankSelect_two(double bias, Rng& rng,
+      internal::rw_lock& lock, bool validate) {
+    size_t sz = base().size();
+    if(sz == 0) {
+      if(validate)
+        throw std::out_of_range("rankSelect(): Population is empty.");
+      else
+        return base().end();
+    }
     if(sz != rankSelect_last_sz || bias != rankSelect_last_bias) {
-      sort_lock.upgrade();
+      lock.upgrade(false); // and keep upgraded over ensure_sorted() later
       rankSelect_probs.clear();
       rankSelect_probs.reserve(sz);
       for(size_t i = 0; i < sz; i++)
@@ -192,7 +266,7 @@ private:
       rankSelect_last_bias = bias;
     }
     ensure_sorted(lock);
-    return operator[](rankSelect_dist(rng));
+    return base().begin() + rankSelect_dist(rng);
   }
 
 public:
@@ -203,18 +277,42 @@ public:
    * \param newSize the maximum desired size of the population. If this bound
    * is satisfied, the population is unchanged. */
   NOINLINE void rankTrim(size_t newSize) {
-    internal::read_lock lock{smp};
-    if(!lock.upgrade_if([newSize,this]() -> bool { return size() > newSize; }))
-      return;
-    if(size() == 0)
+    internal::read_lock lock{base().smp};
+    if(!lock.upgrade_if([newSize,this]() -> bool {
+          return base().size() > newSize;
+        }))
       return;
     ensure_sorted(lock);
-    auto& dummy = Base::first(); // see BasePopulation::randomTrim()
-    Base::as_vec().resize(newSize, dummy);
-    // See reserve()
-    // No sort_lock needed (have write_lock(smp))
-    ++last_sort_mod;
+    /* ensureSorted() does this when it actually changes order.  We might have
+     * incremented mod_cnt by the upgrade_lock above, though. Anyway, we are
+     * certainly sorted now. */
+    last_sort_mod = base().smp.get_mod_cnt();
+    auto& dummy = base().first(); // see BasePopulation::randomTrim()
+    base().as_vec().resize(newSize, dummy);
   }
+
+private:
+
+  /* Helper classes for reverse() */
+  class ReverseIterable {
+
+    const Base& ref;
+
+  public:
+
+    ReverseIterable(const Base& ref_): ref(ref_) { }
+
+    std::reverse_iterator<const_iterator> begin() {
+      return ref.rbegin();
+    }
+
+    std::reverse_iterator<const_iterator> end() {
+      return ref.rend();
+    }
+
+  }; // class OrdPopulation<>::ReverseIterable
+
+public:
 
   /** \brief Sorts the population by fitness for faster response of future
    * rankSelect() calls.
@@ -227,29 +325,53 @@ public:
    * threads. Parallel sorting is currently not supported but this can still
    * be used to guarantee a better balanced workload for individual threads. */
   NOINLINE void sort() {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     ensure_sorted(lock);
+  }
+
+  /** \copybrief sort()
+   *
+   * A variant of sort() for use in blocks protected by PopulationLock.
+   *
+   * This function may need to reorder candidates stored in the population.
+   * This will temporarily upgrade the provided lock to a write lock (which
+   * implies waiting for other threads to finish their running read
+   * operations). This operation is guaranteed not to invalidate any iterators
+   * but the contents they refer to changes. Within the calling thread, the
+   * population observably changes if the order needed to be updated. */
+  NOINLINE void sort(PopulationLock& lock) {
+    ensure_sorted(lock.get());
+  }
+
+  /** \brief Allows to enumerate this population in reverse order.
+   *
+   * Returns a helper object providing the begin() and end() functions needed
+   * for a for-each loop that traverse this population in a reverse order.
+   * This does not affect the ordering within the population in any way and
+   * does not invalidate any iterators. Usually a call to reverse() is
+   * preceded by a call to sort() or another function guaranteeing a
+   * well-defined sorting. */
+  ReverseIterable reverse() const {
+    return {base()};
   }
 
 private:
 
   bool is_sorted(const internal::rw_lock&) const {
-    internal::read_lock sort_lock{sort_smp};
-    return smp.get_mod_cnt() == last_sort_mod;
+    return base().smp.get_mod_cnt() == last_sort_mod;
   }
 
   void ensure_sorted(internal::rw_lock& lock) {
     if(!is_sorted(lock)) {
-      internal::upgrade_lock up{lock};
-      // No one else can be reading or modifying this now (⇐ promise)
-      ++last_sort_mod;
+      // Does not count as a modification (Population is a set)
+      internal::upgrade_lock up{lock, false};
       if(is_sorted(lock))
         return;
-      std::sort(Base::as_vec().begin(), Base::as_vec().end());
-      last_sort_mod = smp.get_mod_cnt();
+      std::sort(base().as_vec().begin(), base().as_vec().end());
+      last_sort_mod = base().smp.get_mod_cnt();
     }
   }
 
-}; // class OrdPopulation
+}; // class OrdPopulation<CBase, is_ref, Tag, Population>
 
 } // namespace gen

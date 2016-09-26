@@ -8,7 +8,8 @@ namespace gen {
 /** \brief The default random number generator for this framework.
  *
  * A strong RNG is not a necessity for genetic applications, so speed was main
- * preference in choosing \b std::minstd_rand. Can be accessed freely by
+ * preference in choosing [**std::minstd_rand**] (http://en.cppreference.com/w/
+ * cpp/numeric/random/linear_congruential_engine). Can be accessed freely by
  * applications of the framework. Similarly, alternative RNGs may be provided
  * to functions like \link BasePopulation::randomSelect()
  * randomSelect()\endlink. */

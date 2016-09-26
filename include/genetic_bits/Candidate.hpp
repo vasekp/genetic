@@ -8,12 +8,13 @@ namespace gen {
  * ```
  * Fitness CBase::fitness() const
  * ```
- * Here, \b Fitness can be a simple type or a class, optionally supporting
+ * Here, \b Fitness can be a simple type or a class, supporting either
  * <b>bool %operator<()</b>, representing a total ordering, or <b>bool
  * %operator<<()</b>, representing a strict partial ordering. If either of the
  * operators exist, they are extended to the Candidate type, comparing the
  * fitness of two candidates.  This is used to switch accessibility of various
- * Population methods.
+ * Population methods. If neither operator is defined, some basic
+ * functionality is still accessible (see BasePopulation).
  *
  * The value returned by Candidate::fitness() is the same as returned by its
  * <b>CBase::fitness()</b>, with the difference that the latter is called
@@ -46,7 +47,7 @@ public:
     constexpr static bool is_float =
       std::is_convertible<FitnessType, double>::value;
 
-  };
+  }; // struct Traits
 #endif
 
 private:
@@ -96,6 +97,6 @@ public:
     return c1.fitness() << c2.fitness();
   }
 
-}; // class Candidate
+}; // class Candidate<CBase>
 
 } // namespace gen
