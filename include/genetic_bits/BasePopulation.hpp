@@ -230,12 +230,12 @@ public:
    *
    * \see PopulationLock */
   iterator begin() {
-    return iterator{Base::begin()};
+    return {Base::begin()};
   }
 
   /** \brief Returns the past-the-end iterator. */
   iterator end() {
-    return iterator{Base::end()};
+    return {Base::end()};
   }
 
 #ifndef DOXYGEN
@@ -245,13 +245,36 @@ public:
    * turned into a move_iterator and const_iterator can not. */
 
   const_iterator begin() const {
-    return const_iterator{Base::begin()};
+    return {Base::begin()};
   }
 
   const_iterator end() const {
-    return const_iterator{Base::end()};
+    return {Base::end()};
+  }
+
+protected:
+  /* We also don't document protected members.
+   * This is accessed from OrdPopulation, other kinds of Population are
+   * insensitive to ordering. */
+
+  std::reverse_iterator<iterator> rbegin() {
+    return {Base::rbegin()};
+  }
+
+  std::reverse_iterator<iterator> rend() {
+    return {Base::rend()};
+  }
+
+  std::reverse_iterator<const_iterator> rbegin() const {
+    return {Base::rbegin()};
+  }
+
+  std::reverse_iterator<const_iterator> rend() const {
+    return {Base::rend()};
   }
 #endif
+
+public:
 
   /** \brief Read-only access to a specified element by reference
    * (no bounds checking).
