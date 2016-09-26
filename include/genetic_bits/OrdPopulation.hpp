@@ -123,9 +123,10 @@ public:
    * arguments are \b x and \b bias, where \b x denotes the rescaled rank of
    * each candidate.  It must be positive and strictly increasing in \b x for
    * <b>bias > 0</b>.  This function will be built in at compile time,
-   * eliminating a function pointer lookup. The default is \b std::exp, for
-   * which an fast specialized algorithm is provided, another usual choice is
-   * \b std::pow.
+   * eliminating a function pointer lookup. The default is [**std::exp**]
+   * (http://en.cppreference.com/w/cpp/numeric/math/exp), for which an fast
+   * specialized algorithm is provided, another usual choice is
+   * [**std::pow**] (http://en.cppreference.com/w/cpp/numeric/math/pow).
    * \param bias > 0 determines how much low-fitness solutions are preferred.
    * Zero would mean no account on fitness in the selection process
    * whatsoever. The bigger the value the more candidates with low fitness are

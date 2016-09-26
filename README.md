@@ -74,9 +74,9 @@ advantageous to explicitly call for this re-evaluation before using the
 dependent functions. See **gen::NSGAPopulation::precompute** for an example 
 scenario of this.
 
-Several function support parallelization via OpenMP tags, and this is on by 
-default. Each of such functions accepts a **bool** argument to turn off OpenMP 
-if not desirable. This will be the case
+Several function support parallelization via [OpenMP][omp] tags, and this is 
+on by default. Each of such functions accepts a **bool** argument to turn off 
+OpenMP if not desirable. This will be the case
 - when called from a single worker thread,
 - when the sample is too small.
 Note that for samples less than about 100 elements, the automatic heuristics 
@@ -93,5 +93,6 @@ algorithm functions][stl]), one can use the [RAII][raii] style
 
 [doxy]: http://www.doxygen.org/index.html
 [doc]: https://vasekp.github.io/genetic/doc/index.html
+[omp]: http://openmp.org/wp/
 [stl]: http://en.cppreference.com/w/cpp/algorithm
 [raii]: http://en.cppreference.com/w/cpp/language/raii
