@@ -84,12 +84,14 @@ public:
    * arguments are \b x and \b bias, where \b x denotes the dominance rank of
    * the candidate.  It must be positive and strictly increasing in \b x for
    * <b>bias > 0</b>.  This function will be built in at compile time,
-   * eliminating a function pointer lookup. The default is \b std::exp,
-   * another usual choice is \b std::pow.
+   * eliminating a function pointer lookup. The default is [**std::exp**]
+   * (http://en.cppreference.com/w/cpp/numeric/math/exp), another usual choice
+   * is [**std::pow**] (http://en.cppreference.com/w/cpp/numeric/math/pow).
    * \param bias > 0 determines how much low-dominated solutions are preferred.
    * Zero would mean no account on dominance rank in the selection process
-   * whatsoever. The bigger the value the more low-dominated candidates are
-   * likely to be selected.
+   * whatsoever. A very large value would mean that candidates would be
+   * selected almost exclusively from the nondominated front (uniformly
+   * distributed).
    * \param rng the random number generator, or gen::rng by default.
    *
    * \returns a constant reference to a randomly chosen candidate.

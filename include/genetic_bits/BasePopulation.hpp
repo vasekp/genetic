@@ -130,7 +130,9 @@ public:
   }
 
   /** \brief Initializes this population from a container of <b>Candidate</b>s
-   * or <b>CBase</b>s (e.g., a \b std::vector or another Population).
+   * or <b>CBase</b>s (e.g., a [**std::vector**] (http://en.cppreference.com/w/
+   * cpp/container/vector) or another Population).
+   *
    * \copydetails add(const Container&) */
   template<class Container>
   explicit BasePopulation(const Container& vec) {
@@ -340,7 +342,8 @@ public:
    *
    * \param count the number of candidates to generate
    * \param src source function; can be any callable object (e.g., a
-   * \b std::function, a function pointer, or a lambda function) returning
+   * [**std::function**] (http://en.cppreference.com/w/cpp/utility/functional/
+   * function), a function pointer, or a lambda function) returning
    * either of \link gen::Candidate Candidate<CBase> \endlink or \b CBase and
    * either by value or by reference (a copy will be taken). In many cases the
    * function call can be inlined by the optimizer if known at compile time.
