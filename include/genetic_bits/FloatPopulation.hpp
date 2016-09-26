@@ -7,7 +7,18 @@ template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
 class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
 
-  using Base = OrdPopulation<CBase, is_ref, Tag, Population>;
+  using Base = BasePopulation<CBase, is_ref, Tag, Population>;
+  using Derived = Population<CBase, is_ref>;
+
+  Base& base() {
+    return static_cast<Base&>(static_cast<Derived&>(*this));
+  }
+
+  const Base& base() const {
+    return static_cast<const Base&>(static_cast<const Derived&>(*this));
+  }
+
+  using iterator = typename Base::iterator;
 
   /* Protects: fitnessSelect_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
@@ -19,14 +30,6 @@ class FloatPopulation: public OrdPopulation<CBase, is_ref, Tag, Population> {
   double fitnessSelect_last_bias{};
 
 public:
-
-  using Base::Base;
-  using Base::smp;
-  using Base::begin;
-  using Base::end;
-  using Base::size;
-  using Base::operator[];
-  using typename Base::iterator;
 
   /** \brief Creates an empty population. */
   FloatPopulation() = default;
@@ -91,7 +94,7 @@ public:
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double mult, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *fitnessSelect_int<
       &internal::eval_in_product<fun>
     >(mult, rng, lock, true);
@@ -99,13 +102,13 @@ public:
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   const Candidate<CBase>& fitnessSelect(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *fitnessSelect_int<fun>(bias, rng, lock, true);
   }
 
   template<double (*fun)(double) = std::exp, class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *fitnessSelect_int<
       &internal::eval_in_product<fun>
     >(bias, rng, lock, true);
@@ -113,7 +116,7 @@ public:
 
   template<double (*fun)(double, double), class Rng = decltype(rng)>
   Candidate<CBase> fitnessSelect_v(double bias, Rng& rng = rng) {
-    internal::read_lock lock{smp};
+    internal::read_lock lock{base().smp};
     return *fitnessSelect_int<fun>(bias, rng, lock, true);
   }
 
@@ -136,27 +139,27 @@ private:
   template<double (*fun)(double, double), class Rng>
   NOINLINE iterator fitnessSelect_int(double bias, Rng& rng,
       internal::rw_lock&, bool validate) {
-    size_t sz = size();
+    size_t sz = base().size();
     if(sz == 0) {
       if(validate)
         throw std::out_of_range("fitnessSelect(): Population is empty.");
       else
-        return end();
+        return base().end();
     }
     internal::read_lock fit_lock{fit_smp};
-    if(fitnessSelect_last_mod != smp.get_mod_cnt()
+    if(fitnessSelect_last_mod != base().smp.get_mod_cnt()
        || bias != fitnessSelect_last_bias) {
       fit_lock.upgrade();
       fitnessSelect_probs.clear();
       fitnessSelect_probs.reserve(sz);
-      for(auto& c : *this)
+      for(auto& c : base())
         fitnessSelect_probs.push_back(1 / fun(c.fitness(), bias));
       fitnessSelect_dist = std::discrete_distribution<size_t>
         (fitnessSelect_probs.begin(), fitnessSelect_probs.end());
-      fitnessSelect_last_mod = smp.get_mod_cnt();
+      fitnessSelect_last_mod = base().smp.get_mod_cnt();
       fitnessSelect_last_bias = bias;
     }
-    return begin() + fitnessSelect_dist(rng);
+    return base().begin() + fitnessSelect_dist(rng);
   }
 
 public:
@@ -174,16 +177,16 @@ public:
    *
    * \throws std::out_of_bounds if called on an empty population. */
   NOINLINE Stat stat() const {
-    if(Base::empty())
+    if(base().empty())
       throw std::out_of_range("stat(): Population is empty.");
     double f, sf = 0, sf2 = 0;
-    internal::read_lock lock{smp};
-    for(auto& c : *this) {
+    internal::read_lock lock{base().smp};
+    for(auto& c : base()) {
       f = c.fitness();
       sf += f;
       sf2 += f*f;
     }
-    size_t sz = size();
+    size_t sz = base().size();
     double dev2 = sf2/sz - sf/sz*sf/sz;
     return {sf/sz,
             dev2 >= 0 ? sqrt(dev2) : 0};

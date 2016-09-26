@@ -11,13 +11,15 @@ namespace gen {
  * NSGAPopulation::Ref Ref \endlink for more details. */
 template<class CBase, bool is_ref = false>
 class NSGAPopulation:
-  public DomPopulation<CBase, is_ref, size_t, NSGAPopulation>
+  public BasePopulation<CBase, is_ref, size_t, NSGAPopulation>,
+  public internal::PopulationChooser<CBase, is_ref, size_t, NSGAPopulation>
 {
 
   static_assert(Candidate<CBase>::Traits::is_dominable,
       "The fitness type of CBase needs to support bool operator<<()!");
 
-  using Base = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
+  using Base = BasePopulation<CBase, is_ref, size_t, NSGAPopulation>;
+  using Dom = DomPopulation<CBase, is_ref, size_t, NSGAPopulation>;
 
   /* Protects: nsga_* */
   /* Promise: to be only acquired from within a read lock on the Base. */
@@ -59,7 +61,7 @@ public:
         return ret;
       }
     }
-    return Base::template front<Ret>(parallel);
+    return static_cast<const Dom&>(*this).front<Ret>(parallel);
   }
 
   /** \copydoc DomPopulation::front_v() */

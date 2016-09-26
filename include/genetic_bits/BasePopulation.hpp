@@ -23,9 +23,18 @@ using PBase = std::vector<internal::CandidateTagged<CBase, is_ref, Tag>>;
  * Controls the return type of selection functions. */
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
+#ifndef DOXYGEN
 class BasePopulation: protected internal::PBase<CBase, is_ref, Tag> {
+#else
+class BasePopulation {
+#endif
 
   using Base = internal::PBase<CBase, is_ref, Tag>;
+
+  /* For access to begin(), end(), size() etc. via CRTP */
+  friend class OrdPopulation<CBase, is_ref, Tag, Population>;
+  friend class FloatPopulation<CBase, is_ref, Tag, Population>;
+  friend class DomPopulation<CBase, is_ref, Tag, Population>;
 
 protected:
 

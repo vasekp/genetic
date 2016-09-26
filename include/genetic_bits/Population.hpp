@@ -5,20 +5,34 @@ class Population;
 
 namespace internal {
 
-template<class CBase, bool is_ref>
-using PopulationChooser = typename std::conditional<
+#ifndef DOXYGEN
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+using OrderChooser = typename std::conditional<
   Candidate<CBase>::Traits::is_comparable,
   typename std::conditional<
     Candidate<CBase>::Traits::is_float,
-    FloatPopulation<CBase, is_ref, internal::empty, gen::Population>,
-    OrdPopulation<CBase, is_ref, internal::empty, gen::Population>
+    FloatPopulation<CBase, is_ref, Tag, Population>,
+    OrdPopulation<CBase, is_ref, Tag, Population>
   >::type,
-  typename std::conditional<
-    Candidate<CBase>::Traits::is_dominable,
-    DomPopulation<CBase, is_ref, internal::empty, gen::Population>,
-    BasePopulation<CBase, is_ref, internal::empty, gen::Population>
-  >::type
->::type; // type alias PopulationChooser
+  empty
+>::type;
+
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+using DominationChooser = typename std::conditional<
+  Candidate<CBase>::Traits::is_dominable,
+  DomPopulation<CBase, is_ref, Tag, Population>,
+  empty
+>::type;
+
+template<class CBase, bool is_ref, class Tag,
+  template<class, bool> class Population>
+class PopulationChooser:
+  public internal::OrderChooser<CBase, is_ref, Tag, Population>,
+  public internal::DominationChooser<CBase, is_ref, Tag, Population>
+{ };
+#endif
 
 } // namespace internal
 
@@ -65,9 +79,12 @@ using PopulationChooser = typename std::conditional<
  *
  * \see NSGAPopulation */
 template<class CBase, bool is_ref = false>
-class Population: public internal::PopulationChooser<CBase, is_ref> {
+class Population:
+  public BasePopulation<CBase, is_ref, internal::empty, Population>,
+  public internal::PopulationChooser<CBase, is_ref, internal::empty, Population>
+{
 
-  using Base = internal::PopulationChooser<CBase, is_ref>;
+  using Base = BasePopulation<CBase, is_ref, internal::empty, Population>;
 
 public:
 
