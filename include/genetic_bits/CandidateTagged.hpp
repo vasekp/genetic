@@ -129,7 +129,8 @@ public:
 }; // class CTIterator
 
 
-/* We need a specialization of std::move_iterator for our CTIterator. */
+/* We need a specialization of std::move_iterator and std::reverse_iterator
+ * for our CTIterator. */
 template<class It>
 class move_iterator: public std::move_iterator<It> {
 
@@ -151,3 +152,21 @@ public:
 } // namespace internal
 
 } // namespace gen
+
+
+namespace std {
+
+template<class It, bool move>
+class reverse_iterator<gen::internal::CTIterator<It, move>> :
+  public gen::internal::CTIterator<reverse_iterator<It>, move>
+{
+
+  using Base = gen::internal::CTIterator<reverse_iterator<It>, move>;
+
+public:
+
+  constexpr reverse_iterator(reverse_iterator<It> x): Base(x) { }
+
+};
+
+} // namespace std

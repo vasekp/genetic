@@ -23,6 +23,7 @@ class OrdPopulation {
   }
 
   using iterator = typename Base::iterator;
+  using const_iterator = typename Base::const_iterator;
 
   size_t last_sort_mod{(size_t)(~0)};
   std::uniform_real_distribution<double> uniform{0, 1};
@@ -289,6 +290,29 @@ public:
     base().as_vec().resize(newSize, dummy);
   }
 
+private:
+
+  /* Helper classes for reverse() */
+  class ReverseIterable {
+
+    const Base& ref;
+
+  public:
+
+    ReverseIterable(const Base& ref_): ref(ref_) { }
+
+    std::reverse_iterator<const_iterator> begin() {
+      return ref.rbegin();
+    }
+
+    std::reverse_iterator<const_iterator> end() {
+      return ref.rend();
+    }
+
+  }; // inner class ReverseIterable
+
+public:
+
   /** \brief Sorts the population by fitness for faster response of future
    * rankSelect() calls.
    *
@@ -316,6 +340,18 @@ public:
    * population observably changes if the order needed to be updated. */
   NOINLINE void sort(PopulationLock& lock) {
     ensure_sorted(lock.get());
+  }
+
+  /** \brief Allows to enumerate this population in reverse order.
+   *
+   * Returns a helper object providing the begin() and end() functions needed
+   * for a for-each loop that traverse this population in a reverse order.
+   * This does not affect the ordering within the population in any way and
+   * does not invalidate any iterators. Usually a call to reverse() is
+   * preceded by a call to sort() or another function guaranteeing a
+   * well-defined sorting. */
+  ReverseIterable reverse() const {
+    return ReverseIterable(base());
   }
 
 private:
