@@ -525,7 +525,14 @@ public:
    *
    * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
+#ifdef DOXYGEN
   const Candidate<CBase>& randomSelect(Rng& rng = rng) {
+#else
+  typename std::enable_if<
+    internal::is_URNG<Rng>(0),
+    const Candidate<CBase>&
+  >::type randomSelect(Rng& rng = rng) {
+#endif
     internal::read_lock lock{smp};
     return *randomSelect_int(rng, lock, true);
   }
@@ -538,7 +545,12 @@ public:
    *
    * \throws std::out_of_bounds if called on an empty population. */
   template<class Rng = decltype(rng)>
+#ifdef DOXYGEN
   Candidate<CBase> randomSelect_v(Rng& rng = rng) {
+#else
+  typename std::enable_if<internal::is_URNG<Rng>(0), Candidate<CBase>>::type
+  randomSelect_v(Rng& rng = rng) {
+#endif
     internal::read_lock lock{smp};
     return *randomSelect_int(rng, lock, true);
   }

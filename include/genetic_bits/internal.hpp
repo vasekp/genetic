@@ -59,6 +59,21 @@ namespace internal {
   template<class>
   constexpr bool is_container(...) { return false; }
 
+
+  /* Helper for functions taking an optional random number generator:
+   * not to be confused with another overload */
+
+  template<typename C>
+  constexpr auto is_URNG(int) ->
+    typename std::enable_if<
+      std::is_integral<typename C::result_type>::value,
+      bool
+    >::type { return true; }
+
+  template<class>
+  constexpr bool is_URNG(...) { return false; }
+
+
 } // namespace internal
 
 } // namespace gen
