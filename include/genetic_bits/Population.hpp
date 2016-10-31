@@ -6,6 +6,10 @@ class Population;
 namespace internal {
 
 #ifndef DOXYGEN
+struct NotComparableStub { };
+
+struct NotDominableStub { };
+
 template<class CBase, bool is_ref, class Tag,
   template<class, bool> class Population>
 using OrderChooser = typename std::conditional<
@@ -15,7 +19,7 @@ using OrderChooser = typename std::conditional<
     FloatPopulation<CBase, is_ref, Tag, Population>,
     OrdPopulation<CBase, is_ref, Tag, Population>
   >::type,
-  empty
+  NotComparableStub
 >::type;
 
 template<class CBase, bool is_ref, class Tag,
@@ -23,7 +27,7 @@ template<class CBase, bool is_ref, class Tag,
 using DominationChooser = typename std::conditional<
   Candidate<CBase>::Traits::is_dominable,
   DomPopulation<CBase, is_ref, Tag, Population>,
-  empty
+  NotDominableStub
 >::type;
 
 template<class CBase, bool is_ref, class Tag,

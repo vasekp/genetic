@@ -28,7 +28,7 @@ struct TagWrap {
  * above.) Also, operator Tag&() is missing so the compilation fails if anyone
  * requests the tag. */
 template<>
-struct TagWrap<empty>: empty {
+struct TagWrap<empty> {
 
   TagWrap(...) { }
 
