@@ -116,9 +116,9 @@ public:
 
   /** \brief Creates a population of size \b count whose candidates are results
    * of calls to the source function \b src.
-   * \copydetails add(size_t, Source, bool) */
-  template<class Source>
-  explicit BasePopulation(size_t count, Source src, bool parallel = true) {
+   * \copydetails add(size_t, std::function<Candidate()>, bool) */
+  explicit BasePopulation(size_t count, std::function<Candidate<CBase>()> src,
+      bool parallel = true) {
     add(count, src, parallel);
   }
 
@@ -341,15 +341,13 @@ public:
   /** \brief Draws \b count candidates from a source function \b src.
    *
    * \param count the number of candidates to generate
-   * \param src source function; can be any callable object (e.g., a
-   * [**std::function**] (http://en.cppreference.com/w/cpp/utility/functional/
-   * function), a function pointer, or a lambda function) returning
-   * either of \link gen::Candidate Candidate<CBase> \endlink or \b CBase and
-   * either by value or by reference (a copy will be taken). In many cases the
-   * function call can be inlined by the optimizer if known at compile time.
+   * \param src a source function returning Candidate. Can also be a function
+   * pointer or a lambda function and can return by reference, the appropriate
+   * conversions are automatically taken. In many cases the function call will
+   * be inlined by the optimizer if known at compile time.
    * \param parallel controls parallelization using OpenMP (on by default) */
-  template<class Source>
-  NOINLINE void add(size_t count, Source src, bool parallel = true) {
+  NOINLINE void add(size_t count, std::function<Candidate<CBase>()> src,
+      bool parallel = true) {
     internal::write_lock lock{smp};
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
@@ -455,12 +453,9 @@ public:
    * candidate is removed from the population.
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all candidates satisfying the predicate are
-   * removed.
-   * \param rng the random number generator, or gen::rng by default. Unused
-   * if \b randomize is \b false. */
-  template<class Rng = decltype(rng)>
-  NOINLINE void prune(bool (*test)(const Candidate<CBase>&),
-      size_t minSize = 0, Rng& rng = rng) {
+   * removed. */
+  NOINLINE void prune(std::function<bool(const Candidate<CBase>&)> test,
+      size_t minSize = 0) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
@@ -494,8 +489,9 @@ public:
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
   NOINLINE void prune(
-      bool (*test)(const Candidate<CBase>&, const Candidate<CBase>&),
-      size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
+      std::function<
+        bool(const Candidate<CBase>&, const Candidate<CBase>&)
+      > test, size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
       return;
