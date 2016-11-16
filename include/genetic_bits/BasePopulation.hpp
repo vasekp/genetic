@@ -116,7 +116,7 @@ public:
 
   /** \brief Creates a population of size \b count whose candidates are results
    * of calls to the source function \b src.
-   * \copydetails add(size_t, std::function<Candidate()>, bool) */
+   * \copydetails add(size_t, std::function<Candidate<CBase>()>, bool) */
   explicit BasePopulation(size_t count, std::function<Candidate<CBase>()> src,
       bool parallel = true) {
     add(count, src, parallel);
@@ -345,7 +345,13 @@ public:
    * pointer or a lambda function and can return by reference, the appropriate
    * conversions are automatically taken. In many cases the function call will
    * be inlined by the optimizer if known at compile time.
-   * \param parallel controls parallelization using OpenMP (on by default) */
+   * \param parallel controls parallelization using OpenMP (on by default).
+   * If an exactly reproducible behaviour is required in case \b parallel ==
+   * \b true, the macro GENETIC_OPENMP_REPRODUCIBLE must be defined before
+   * including \b genetic.h and a fixed number of threads ensured by
+   * [**omp_set_num_threads()**](https://gcc.gnu.org/onlinedocs/libgomp/
+   * omp_005fset_005fnum_005fthreads.html) and [**omp_set_dynamic()**]
+   * (https://gcc.gnu.org/onlinedocs/libgomp/omp_005fset_005fdynamic.html). */
   NOINLINE void add(size_t count, std::function<Candidate<CBase>()> src,
       bool parallel = true) {
     internal::write_lock lock{smp};
