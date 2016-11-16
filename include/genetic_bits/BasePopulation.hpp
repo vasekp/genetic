@@ -352,17 +352,37 @@ public:
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
+      // One per thread
       std::vector<Candidate<CBase>> tmp{};
+
+      /* Generate count candidates in parallel. If exact reproducibility of
+       * runs is required we must adhere to a static workload share and an
+       * ordered merge (implying a partial thread barrier) between generation
+       * and collection. (Also, ensure the same number of threads.) If not,
+       * dynamic generation and a per-thread critical section are faster for
+       * sufficient counts. */
+#ifdef GENETIC_OPENMP_REPRODUCIBLE
+      tmp.reserve(count/omp_get_num_threads() + 1);
+      #pragma omp for schedule(static)
+#else
       tmp.reserve(count*2/omp_get_num_threads());
       #pragma omp for schedule(dynamic)
-      for(size_t j = 0; j < count; j++) {
-        Candidate<CBase> c{src()};
-        tmp.push_back(c);
-      }
+#endif
+      // Generation loop
+      for(size_t j = 0; j < count; j++)
+        tmp.push_back(src());
+
+#ifdef GENETIC_OPENMP_REPRODUCIBLE
+      #pragma omp for ordered schedule(static)
+      for(int j = 0; j < omp_get_num_threads(); j++)
+        #pragma omp ordered
+#else
       #pragma omp critical
-      Base::insert(Base::end(),
-          std::make_move_iterator(tmp.begin()),
-          std::make_move_iterator(tmp.end()));
+#endif
+        // Collection logic (unguarded)
+        Base::insert(Base::end(),
+            std::make_move_iterator(tmp.begin()),
+            std::make_move_iterator(tmp.end()));
     }
   }
 
