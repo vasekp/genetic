@@ -116,7 +116,7 @@ public:
 
   /** \brief Creates a population of size \b count whose candidates are results
    * of calls to the source function \b src.
-   * \copydetails add(size_t, std::function<Candidate()>, bool) */
+   * \copydetails add(size_t, std::function<Candidate<CBase>()>, bool) */
   explicit BasePopulation(size_t count, std::function<Candidate<CBase>()> src,
       bool parallel = true) {
     add(count, src, parallel);
@@ -345,24 +345,50 @@ public:
    * pointer or a lambda function and can return by reference, the appropriate
    * conversions are automatically taken. In many cases the function call will
    * be inlined by the optimizer if known at compile time.
-   * \param parallel controls parallelization using OpenMP (on by default) */
+   * \param parallel controls parallelization using OpenMP (on by default).
+   * If an exactly reproducible behaviour is required in case \b parallel ==
+   * \b true, the macro GENETIC_OPENMP_REPRODUCIBLE must be defined before
+   * including \b genetic.h and a fixed number of threads ensured by
+   * [**omp_set_num_threads()**](https://gcc.gnu.org/onlinedocs/libgomp/
+   * omp_005fset_005fnum_005fthreads.html) and [**omp_set_dynamic()**]
+   * (https://gcc.gnu.org/onlinedocs/libgomp/omp_005fset_005fdynamic.html). */
   NOINLINE void add(size_t count, std::function<Candidate<CBase>()> src,
       bool parallel = true) {
     internal::write_lock lock{smp};
     Base::reserve(size() + count);
     #pragma omp parallel if(parallel)
     {
+      // One per thread
       std::vector<Candidate<CBase>> tmp{};
+
+      /* Generate count candidates in parallel. If exact reproducibility of
+       * runs is required we must adhere to a static workload share and an
+       * ordered merge (implying a partial thread barrier) between generation
+       * and collection. (Also, ensure the same number of threads.) If not,
+       * dynamic generation and a per-thread critical section are faster for
+       * sufficient counts. */
+#ifdef GENETIC_OPENMP_REPRODUCIBLE
+      tmp.reserve(count/omp_get_num_threads() + 1);
+      #pragma omp for schedule(static)
+#else
       tmp.reserve(count*2/omp_get_num_threads());
       #pragma omp for schedule(dynamic)
-      for(size_t j = 0; j < count; j++) {
-        Candidate<CBase> c{src()};
-        tmp.push_back(c);
-      }
+#endif
+      // Generation loop
+      for(size_t j = 0; j < count; j++)
+        tmp.push_back(src());
+
+#ifdef GENETIC_OPENMP_REPRODUCIBLE
+      #pragma omp for ordered schedule(static)
+      for(int j = 0; j < omp_get_num_threads(); j++)
+        #pragma omp ordered
+#else
       #pragma omp critical
-      Base::insert(Base::end(),
-          std::make_move_iterator(tmp.begin()),
-          std::make_move_iterator(tmp.end()));
+#endif
+        // Collection logic (unguarded)
+        Base::insert(Base::end(),
+            std::make_move_iterator(tmp.begin()),
+            std::make_move_iterator(tmp.end()));
     }
   }
 
