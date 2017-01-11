@@ -498,25 +498,29 @@ public:
    *
    * Candidates are tested for similarity according to a provided criterion
    * function. If a pair of candidates (\b a, \b b) satisfies the test, only
-   * \b a is kept. A minimum number of candidates can be set; if so, the
-   * procedure stops when enough candidates have been removed to satisfy this
-   * bound.
+   * one of them is kept. A minimum number of candidates can be set; if so,
+   * the procedure stops when enough candidates have been removed to satisfy
+   * this bound.
    *
-   * \param test a boolean function accepting two constant \link
-   * gen::Candidate Candidate<CBase>\endlink references. Should be symmetric
-   * in its arguments. If the return value is \b true the latter candidate is
-   * removed from the population.
+   * \param test an integer function accepting two constant \link
+   * gen::Candidate Candidate<CBase>\endlink references. If the return value
+   * is
+   * - positive, the candidate supplied as the first argument is retained,
+   * the second is removed,
+   * - negative, the first candidate is removed,
+   * - zero, both candidates are kept.
+   * .
+   * Each pair of candidates is compared at most once.
    * \param minSize a minimum number of candidates to be kept if possible. If
    * zero (the default value), all duplicates are removed.
    * \param randomize whether to randomly shuffle the sample prior to pruning
-   * (this is the default). If \b false then earlier appearing candidates are
-   * preferred in survival.
+   * (this is the default).
    * \param rng the random number generator, or gen::rng by default. Unused
    * if \b randomize is \b false. */
   template<class Rng = decltype(rng)>
   NOINLINE void prune(
       std::function<
-        bool(const Candidate<CBase>&, const Candidate<CBase>&)
+        int(const Candidate<CBase>&, const Candidate<CBase>&)
       > test, size_t minSize = 0, bool randomize = true, Rng& rng = rng) {
     internal::read_lock lock{smp};
     if(!lock.upgrade_if([minSize,this]() -> bool { return size() > minSize; }))
@@ -527,9 +531,13 @@ public:
     for(size_t i = 0; i < sz - 1; i++) {
       const Candidate<CBase>& op1 = operator[](i);
       for(size_t j = i + 1; j < sz; ) {
-        if(test(op1, operator[](j)))
+        int ret = test(op1, operator[](j));
+        if(ret > 0)
           std::swap(Base::operator[](j), Base::operator[](--sz));
-        else
+        else if(ret < 0) {
+          std::swap(Base::operator[](i), Base::operator[](j));
+          std::swap(Base::operator[](j), Base::operator[](--sz));
+        } else
           j++;
       }
     }
