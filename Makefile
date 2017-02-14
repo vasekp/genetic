@@ -7,7 +7,7 @@ doc:	$(HEADERS) Doxyfile README.md
 	doxygen Doxyfile
 
 clean:
-	rm -r doc
+	-rm -r doc
 	make -C examples clean
 
 .PHONY: all examples clean
