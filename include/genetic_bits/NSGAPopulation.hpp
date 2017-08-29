@@ -56,7 +56,7 @@ public:
         return ret;
       }
     }
-    return static_cast<const Dom&>(*this).front<Ret>(parallel);
+    return static_cast<const Dom&>(*this).template front<Ret>(parallel);
   }
 
   /** \copydoc DomPopulation::front_v() */
