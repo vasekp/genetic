@@ -1,3 +1,5 @@
+#include <functional>
+
 namespace gen {
 
 /* Internal functions only to be used from other sources in this directory. */

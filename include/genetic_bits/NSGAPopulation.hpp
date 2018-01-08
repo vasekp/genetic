@@ -24,6 +24,7 @@ class NSGAPopulation:
   std::discrete_distribution<size_t> nsga_dist{};
   std::vector<double> nsga_probs{};
   size_t nsga_last_mod{(size_t)(~0)};
+  size_t nsga_rank_cnt{};
   double nsga_last_bias{};
 
 public:
@@ -167,6 +168,16 @@ public:
 
 #endif
 
+  size_t getNSGARanks() {
+    internal::read_lock lock{smp};
+    if(smp.get_mod_cnt() != nsga_last_mod) {
+      lock.upgrade(false);
+      nsga_rate();
+      nsga_last_mod = smp.get_mod_cnt();
+    }
+    return nsga_rank_cnt;
+  }
+
 private:
 
   struct nsga_struct {
@@ -236,6 +247,7 @@ private:
       }
       cur_rank++;
     }
+    nsga_rank_cnt = cur_rank;
   }
 
   template<double (*fun)(double, double), class Rng>
